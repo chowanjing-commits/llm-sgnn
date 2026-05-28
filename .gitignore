@@ -1,0 +1,63 @@
+# Python caches
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Local IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Virtual environments
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Large local datasets and model artifacts
+data/
+embeddings/
+models/
+checkpoints/
+archive/
+
+# Generated binary artifacts
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+*.pkl
+*.npz
+*.npy
+
+# Runtime outputs
+runs/
+wandb/
+tensorboard/
+outputs/
+tmp/
+temp/
+
+# Logs: keep only curated paper-result CSVs below.
+logs/*
+!logs/main_multiseed_all_backbones_wide_20260524.csv
+!logs/main_multiseed_all_backbones_20260524.csv
+!logs/recovery_quality_adaptive_summary_multiseed_20260522.csv
+!logs/label_budget_controls_minimal_summary_20260527_102921.csv
+!logs/citation_cuda_inverse_active_edge_strategy_ablation_summary_20260526_150608.csv
+!logs/arxiv_full_cuda_inverse_active_edge_strategy_ablation_summary_20260526_151458.csv
+!logs/gcn_cuda_full_edge_strategy_ablation_summary_20260526_164210.csv
+!logs/gat_cuda_full_edge_strategy_ablation_summary_20260526_171657.csv
+!logs/label_budget_controls_mlp_droprate_summary_20260528_113213.csv
+!logs/label_budget_controls_original_graph_mlp_minimal_summary_20260528_160054.csv
+!logs/cora_synthetic_text_recovery_summary_20260523_160324.csv
+!logs/pubmed_synthetic_text_recovery_summary_20260523_154008.csv
+!logs/arxiv_synthetic_text_recovery_summary_20260523_172141.csv
+
+*.log
+*.out
