@@ -38,6 +38,18 @@ Formal experiments should use the project environment:
 conda run -n llm-sgnn python scripts\utils\run_cold_start_recovery.py
 ```
 
+By default, the script reuses cached text-derived embeddings when available.
+To exercise the full raw-text-to-feature path before admission and edge recovery,
+pass:
+
+```powershell
+--force-regenerate-embeddings
+```
+
+This calls the dataset preprocessing pipeline to rebuild `x_llm` from raw text
+before cold-start admission. It can be expensive on full arXiv, so cached
+features remain the default for budget sweeps.
+
 Environment snapshot checked on 2026-05-28:
 
 - Python: `C:\Users\AnjingChow\miniconda3\envs\llm-sgnn\python.exe`
@@ -326,6 +338,8 @@ Interpretation:
 Protocol audit:
 
 - Cold-start admission uses only `x_llm` and the cold-start candidate mask.
+- `x_llm` can be loaded from cache or regenerated from raw text with
+  `--force-regenerate-embeddings`.
 - Ground-truth labels of admitted nodes are not used for admission, pseudo-label
   assignment, or edge construction.
 - Pseudo labels are inferred from observed training labels through

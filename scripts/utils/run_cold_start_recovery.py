@@ -41,18 +41,18 @@ torch.serialization.add_safe_globals(
 )
 
 
-def load_dataset(dataset, arxiv_subgraph_size):
+def load_dataset(dataset, arxiv_subgraph_size, force_regenerate_embeddings=False):
     if dataset == "wikics":
-        data, _ = preprocess_wikics()
+        data, _ = preprocess_wikics(force_regenerate=force_regenerate_embeddings)
         return data, "WikiCS", "wikics"
     if dataset == "arxiv":
-        data, _ = preprocess_arxiv()
+        data, _ = preprocess_arxiv(force_regenerate=force_regenerate_embeddings)
         if arxiv_subgraph_size > 0:
             data = sample_arxiv_subgraph(data, num_nodes=arxiv_subgraph_size, seed=42)
             return data, f"ogbn-arxiv-subgraph-{arxiv_subgraph_size}", "single"
         return data, "ogbn-arxiv-full", "single"
     if dataset in {"cora", "pubmed"}:
-        data, _ = preprocess_citation(dataset)
+        data, _ = preprocess_citation(dataset, force_regenerate=force_regenerate_embeddings)
         if hasattr(data, "text_available_mask"):
             data.repair_target_mask = data.text_available_mask
             data.semantic_candidate_mask = data.text_available_mask
@@ -510,6 +510,11 @@ def main():
     parser.add_argument("--num-runs", type=int, default=3)
     parser.add_argument("--split-indices", type=str, default="0")
     parser.add_argument("--arxiv-subgraph-size", type=int, default=10000)
+    parser.add_argument(
+        "--force-regenerate-embeddings",
+        action="store_true",
+        help="Regenerate text-derived embeddings from raw text before running cold-start admission.",
+    )
     parser.add_argument("--output-prefix", type=str, default="cold_start_recovery")
     args = parser.parse_args()
     if args.admission_ratios is not None:
@@ -527,12 +532,17 @@ def main():
         raise ValueError(f"Unknown admission strategies: {unknown_strategies}")
 
     config.set_seed()
-    data, dataset_name, split_mode = load_dataset(args.dataset, args.arxiv_subgraph_size)
+    data, dataset_name, split_mode = load_dataset(
+        args.dataset,
+        args.arxiv_subgraph_size,
+        force_regenerate_embeddings=args.force_regenerate_embeddings,
+    )
     split_indices = parse_csv_ints(args.split_indices) if split_mode == "wikics" else [0]
 
     print("=" * 80)
     print(f"Cold-start recovery on {dataset_name}")
     print(f"Nodes={data.num_nodes} edges={data.edge_index.size(1)} classes={int(data.y.max().item() + 1)}")
+    print(f"Text feature generation={'regenerate' if args.force_regenerate_embeddings else 'cached_or_existing'}")
     print(f"Admission ratios={','.join(str(value) for value in admission_ratios)}")
     print(f"Admission strategies={','.join(admission_strategies)}, pseudo labels={args.pseudo_label_strategy}")
     print("=" * 80)
@@ -598,6 +608,7 @@ def main():
                         "adaptive_threshold_alpha": args.adaptive_threshold_alpha,
                         "model_type": args.model_type,
                         "beta": args.beta,
+                        "force_regenerate_embeddings": bool(args.force_regenerate_embeddings),
                         "sparse_edges_mean": float(np.mean([item["sparse_edges"] for item in stats])),
                         "repaired_edges_mean": float(np.mean([item["repaired_edges"] for item in stats])),
                         "cold_start_train_nodes_mean": float(np.mean([item["cold_start_train_nodes"] for item in stats])),

@@ -656,3 +656,5 @@ b = \min(k,\ b_{max},\ \lceil d_{obs} \rceil).
 | 冷启动准入 | `scripts/utils/summarize_cold_start_budget.py` | 从冷启动预算 CSV 生成表 D1-D2 的 Markdown |
 
 表注：表中列出的 CSV 均为轻量结果记录，适合随代码和论文草稿保存。完整 embedding、原始数据和本地下载的生成模型体积较大，应通过数据准备脚本或外部存储管理。
+
+冷启动准入脚本默认复用缓存的文本表征；若需要验证从原始文本到特征生成、准入、伪标签、连边和训练的完整链路，可添加 `--force-regenerate-embeddings` 重新构建 `x_llm`。完整 ogbn-arxiv 上该步骤开销较大，因此预算消融默认使用缓存表征。
