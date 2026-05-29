@@ -61,6 +61,17 @@ random recovery path that reintroduced the dropped training nodes' ground-truth
 labels. Non-repair baselines and runs without `--cold-start` keep the previous
 behavior for backward-compatible comparisons.
 
+To validate the raw-text-to-feature segment from the main runner, pass:
+
+```powershell
+--force-regenerate-embeddings
+```
+
+The flag is forwarded to the dataset preprocessors before admission and training,
+so `run_single_dataset_pilot.py --cold-start --force-regenerate-embeddings`
+exercises the full path from raw text features to cold-start admission, pseudo
+labels, semantic edges, and GNN training.
+
 By default, the script reuses cached text-derived embeddings when available.
 To exercise the full raw-text-to-feature path before admission and edge recovery,
 pass:
@@ -440,4 +451,5 @@ Integration smoke checks on 2026-05-29:
 conda run -n llm-sgnn python -m py_compile scripts\utils\run_single_dataset_pilot.py src\cold_start.py
 conda run -n llm-sgnn python scripts\utils\run_single_dataset_pilot.py --dataset cora --model-filter ours_gcn --num-runs 1 --num-epochs 1 --drop-rate 0.1 --node-drop-rate 0.2 --cold-start --admission-ratio 0.5 --repair-policy adaptive --max-edges-per-recovered-node 5
 conda run -n llm-sgnn python scripts\utils\run_single_dataset_pilot.py --dataset cora --model-filter ours_gcn --num-runs 1 --num-epochs 1 --drop-rate 0.1 --node-drop-rate 0.2 --recovery-ratio 0.5 --repair-policy adaptive --max-edges-per-recovered-node 5
+conda run -n llm-sgnn python scripts\utils\run_single_dataset_pilot.py --dataset cora --model-filter ours_gcn --num-runs 1 --num-epochs 1 --drop-rate 0.1 --node-drop-rate 0.2 --cold-start --admission-ratio 0.5 --repair-policy adaptive --max-edges-per-recovered-node 5 --force-regenerate-embeddings
 ```

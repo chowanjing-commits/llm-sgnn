@@ -455,6 +455,11 @@ def main():
     parser.add_argument("--pseudo-label-k", type=int, default=5)
     parser.add_argument("--pseudo-label-confidence", type=float, default=0.0)
     parser.add_argument(
+        "--force-regenerate-embeddings",
+        action="store_true",
+        help="Regenerate text-derived node embeddings before cold-start admission or training.",
+    )
+    parser.add_argument(
         "--model-filter",
         type=str,
         default="all",
@@ -471,11 +476,11 @@ def main():
     config.set_seed()
 
     if args.dataset == "wikics":
-        data, _ = preprocess_wikics()
+        data, _ = preprocess_wikics(force_regenerate=args.force_regenerate_embeddings)
         dataset_name = "WikiCS"
         split_indices = [int(x) for x in args.split_indices.split(",") if x.strip() != ""]
     elif args.dataset == "arxiv":
-        data, _ = preprocess_arxiv()
+        data, _ = preprocess_arxiv(force_regenerate=args.force_regenerate_embeddings)
         if args.arxiv_subgraph_size > 0:
             data = sample_arxiv_subgraph(data, num_nodes=args.arxiv_subgraph_size, seed=42)
             dataset_name = f"ogbn-arxiv-subgraph-{args.arxiv_subgraph_size}"
@@ -483,7 +488,7 @@ def main():
             dataset_name = "ogbn-arxiv-full"
         split_indices = [0]
     elif args.dataset in {"cora", "pubmed"}:
-        data, _ = preprocess_citation(args.dataset)
+        data, _ = preprocess_citation(args.dataset, force_regenerate=args.force_regenerate_embeddings)
         dataset_name = args.dataset.upper() if args.dataset == "cora" else "PubMed"
         if hasattr(data, "text_available_mask"):
             data.repair_target_mask = data.text_available_mask
@@ -502,6 +507,7 @@ def main():
     print(f"Epochs: {args.num_epochs}")
     print(f"Runs: {args.num_runs}")
     print(f"Splits: {split_indices}")
+    print(f"Text feature generation: {'regenerate' if args.force_regenerate_embeddings else 'cached_or_existing'}")
     print(f"k neighbors: {args.k_neighbors}")
     print(f"beta: {args.beta:.2f}")
     if args.cold_start:
