@@ -161,6 +161,8 @@ Important fields:
 - `admission_ratio`: cold-start admission budget.
 - `cold_start_train_nodes_mean`: candidate cold-start training nodes.
 - `selected_cold_start_nodes_mean`: admitted nodes before pseudo-label filtering.
+- `sampled_recovered_nodes_mean`: legacy recovery column; in cold-start main-entry
+  logs it is kept as a backward-compatible alias for selected cold-start nodes.
 - `pseudo_train_nodes_mean`: admitted nodes that enter the supervised loss.
 - `recovery_edges_mean`: semantic edges added for admitted nodes.
 - `pseudo_label_accuracy_mean`: diagnostic only; not available to the method.

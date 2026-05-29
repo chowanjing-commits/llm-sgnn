@@ -272,6 +272,7 @@ def train_and_eval(
     train_y = data.y.clone()
     successful_recovered_mask = torch.zeros_like(dropped_node_mask)
     sampled_recovered_mask = torch.zeros_like(dropped_node_mask)
+    selected_cold_start_mask = torch.zeros_like(dropped_node_mask)
     added_recovery_edges = 0
     model_edge_index = sparse_edge
     cold_start_train_mask = data.train_mask & dropped_node_mask
@@ -299,6 +300,7 @@ def train_and_eval(
         model_edge_index = state["edge_index"]
         train_mask = state["train_mask"]
         train_y = state["pseudo_y"]
+        selected_cold_start_mask = state["selected_mask"]
         sampled_recovered_mask = state["selected_mask"]
         successful_recovered_mask = state["successful_recovered_mask"]
         label_ready_mask = state["label_ready_mask"]
@@ -408,6 +410,7 @@ def train_and_eval(
         "train_nodes": effective_train_count,
         "observed_train_nodes": observed_train_count,
         "cold_start_train_nodes": int(cold_start_train_mask.sum().item()),
+        "selected_cold_start_nodes": int(selected_cold_start_mask.sum().item()),
         "sampled_recovered_nodes": int(sampled_recovered_mask.sum().item()),
         "label_ready_nodes": int(label_ready_mask.sum().item()),
         "successful_recovered_nodes": int(successful_recovered_mask.sum().item()),
@@ -578,6 +581,7 @@ def main():
         train_nodes = []
         observed_train_nodes = []
         cold_start_train_nodes = []
+        selected_cold_start_nodes = []
         sampled_recovered_nodes = []
         label_ready_nodes = []
         successful_recovered_nodes = []
@@ -616,6 +620,7 @@ def main():
                 train_nodes.append(result["train_nodes"])
                 observed_train_nodes.append(result["observed_train_nodes"])
                 cold_start_train_nodes.append(result["cold_start_train_nodes"])
+                selected_cold_start_nodes.append(result["selected_cold_start_nodes"])
                 sampled_recovered_nodes.append(result["sampled_recovered_nodes"])
                 label_ready_nodes.append(result["label_ready_nodes"])
                 successful_recovered_nodes.append(result["successful_recovered_nodes"])
@@ -624,12 +629,17 @@ def main():
                 pseudo_label_accuracies.append(result["pseudo_label_accuracy"])
                 pseudo_label_confidences.append(result["pseudo_label_confidence_mean"])
                 selected_center_distances.append(result["selected_center_distance_mean"])
+                selected_metric = (
+                    f"selected_cold_start={result['selected_cold_start_nodes']} "
+                    if args.cold_start and is_repair_model(model_type)
+                    else f"sampled_recovered={result['sampled_recovered_nodes']} "
+                )
                 print(
                     f"  split={split_idx} seed={seed}: "
                     f"acc={acc * 100:.2f}% sparse_edges={result['sparse_edges']} "
                     f"dropped_nodes={result['dropped_nodes']} train_nodes={result['train_nodes']} "
                     f"observed_train_nodes={result['observed_train_nodes']} "
-                    f"sampled_recovered={result['sampled_recovered_nodes']} "
+                    f"{selected_metric}"
                     f"successful_recovered={result['successful_recovered_nodes']} "
                     f"pseudo_train={result['pseudo_train_nodes']} "
                     f"recovery_edges={result['recovery_edges']}"
@@ -653,6 +663,9 @@ def main():
                 "train_nodes_mean": float(np.mean(train_nodes)),
                 "observed_train_nodes_mean": float(np.mean(observed_train_nodes)),
                 "cold_start_train_nodes_mean": float(np.mean(cold_start_train_nodes)),
+                "selected_cold_start_nodes_mean": (
+                    float(np.mean(selected_cold_start_nodes)) if args.cold_start else np.nan
+                ),
                 "sampled_recovered_nodes_mean": float(np.mean(sampled_recovered_nodes)),
                 "label_ready_nodes_mean": float(np.mean(label_ready_nodes)),
                 "successful_recovered_nodes_mean": float(np.mean(successful_recovered_nodes)),
@@ -694,24 +707,27 @@ def main():
     result_df.to_csv(out_path, index=False)
 
     print("\nSummary")
-    print(
-        result_df[
-            [
-                "model",
-                "accuracy",
-                "std",
-                "sparse_edges_mean",
-                "dropped_nodes_mean",
-                "observed_train_nodes_mean",
-                "train_nodes_mean",
-                "sampled_recovered_nodes_mean",
-                "pseudo_train_nodes_mean",
-                "successful_recovered_nodes_mean",
-                "recovery_edges_mean",
-                "pseudo_label_accuracy_mean",
-            ]
-        ].to_string(index=False)
+    summary_columns = [
+        "model",
+        "accuracy",
+        "std",
+        "sparse_edges_mean",
+        "dropped_nodes_mean",
+        "observed_train_nodes_mean",
+        "train_nodes_mean",
+    ]
+    if args.cold_start:
+        summary_columns.append("selected_cold_start_nodes_mean")
+    summary_columns.extend(
+        [
+            "sampled_recovered_nodes_mean",
+            "pseudo_train_nodes_mean",
+            "successful_recovered_nodes_mean",
+            "recovery_edges_mean",
+            "pseudo_label_accuracy_mean",
+        ]
     )
+    print(result_df[summary_columns].to_string(index=False))
     print(f"\nSaved to: {out_path}")
 
 
