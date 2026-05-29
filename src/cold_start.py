@@ -10,6 +10,60 @@ import torch
 import torch.nn.functional as F
 
 
+def encode_texts_with_transformer(
+    texts,
+    model_name=None,
+    batch_size=None,
+    max_length=None,
+    device=None,
+):
+    """
+    Encode raw node texts into frozen Transformer features.
+
+    This is the generic raw-text feature generation entry for text-only
+    cold-start nodes. Dataset preprocessors may still cache their own embeddings,
+    but external new nodes can use this function before admission.
+    """
+    from tqdm import tqdm
+    from transformers import AutoModel, AutoTokenizer
+
+    from src import config
+
+    if model_name is None:
+        model_name = config.LLM_MODEL_NAME
+    if batch_size is None:
+        batch_size = config.LLM_BATCH_SIZE
+    if max_length is None:
+        max_length = config.LLM_MAX_LENGTH
+    if device is None:
+        device = config.DEVICE
+
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModel.from_pretrained(model_name).to(device)
+    model.eval()
+
+    embeddings = []
+    with torch.no_grad():
+        for start in tqdm(range(0, len(texts), batch_size), desc="Encoding cold-start texts"):
+            batch_texts = [text if str(text).strip() else "Unknown document" for text in texts[start : start + batch_size]]
+            inputs = tokenizer(
+                batch_texts,
+                padding=True,
+                truncation=True,
+                max_length=max_length,
+                return_tensors="pt",
+            ).to(device)
+            outputs = model(**inputs)
+            embeddings.append(outputs.last_hidden_state[:, 0, :].cpu())
+
+    del model
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    if not embeddings:
+        return torch.empty((0, 0), dtype=torch.float)
+    return torch.cat(embeddings, dim=0).float()
+
+
 def normalized_cpu(x):
     return F.normalize(x.detach().cpu().float(), p=2, dim=1)
 
