@@ -47,6 +47,20 @@ parameter calls. The pipeline performs admission, pseudo-labeling, semantic edge
 recovery, and train-mask construction. The script above is an experiment runner
 that loads datasets, calls this pipeline, trains the GNN, and writes CSV results.
 
+The main single-dataset method runner also supports the same cold-start pipeline:
+
+```powershell
+python scripts\utils\run_single_dataset_pilot.py --cold-start
+```
+
+When `--cold-start` is enabled, Ours/`LLM_GNN_*` models call
+`build_cold_start_training_state_from_config` before training. The runner then
+uses the pipeline's recovered `edge_index`, `pseudo_y`, and `train_mask` for the
+supervised loss. This is the main-method integration path; it avoids the earlier
+random recovery path that reintroduced the dropped training nodes' ground-truth
+labels. Non-repair baselines and runs without `--cold-start` keep the previous
+behavior for backward-compatible comparisons.
+
 By default, the script reuses cached text-derived embeddings when available.
 To exercise the full raw-text-to-feature path before admission and edge recovery,
 pass:
@@ -140,6 +154,11 @@ Important fields:
 - `recovery_edges_mean`: semantic edges added for admitted nodes.
 - `pseudo_label_accuracy_mean`: diagnostic only; not available to the method.
 - `selected_center_distance_mean`: representativeness diagnostic for clustering.
+
+`run_single_dataset_pilot.py --cold-start` additionally writes the same
+cold-start control fields beside the existing sparse-graph pilot metrics, so the
+main-method logs can be audited for admission, pseudo-label filtering, and edge
+recovery counts.
 
 ## Boundary Against Previous Method
 
@@ -353,6 +372,9 @@ Protocol audit:
   `src/cold_start.py` so they can be reused outside the experiment runner.
 - `ColdStartPipelineConfig` groups the admission, pseudo-label, and edge-recovery
   hyperparameters for main-method integration.
+- `scripts/utils/run_single_dataset_pilot.py --cold-start` now routes Ours
+  models through the cold-start pipeline and trains on `pseudo_y` rather than
+  the hidden labels of dropped cold-start nodes.
 - Cold-start admission uses only `x_llm` and the cold-start candidate mask.
 - `x_llm` can be loaded from cache or regenerated from raw text with
   `--force-regenerate-embeddings`.
@@ -371,3 +393,11 @@ Table audit:
   budget CSV files and matched the manually inserted values.
 - `scripts/utils/summarize_cold_start_budget.py` can regenerate the markdown
   tables from the saved summary CSV files.
+
+Integration smoke checks on 2026-05-29:
+
+```powershell
+conda run -n llm-sgnn python -m py_compile scripts\utils\run_single_dataset_pilot.py src\cold_start.py
+conda run -n llm-sgnn python scripts\utils\run_single_dataset_pilot.py --dataset cora --model-filter ours_gcn --num-runs 1 --num-epochs 1 --drop-rate 0.1 --node-drop-rate 0.2 --cold-start --admission-ratio 0.5 --repair-policy adaptive --max-edges-per-recovered-node 5
+conda run -n llm-sgnn python scripts\utils\run_single_dataset_pilot.py --dataset cora --model-filter ours_gcn --num-runs 1 --num-epochs 1 --drop-rate 0.1 --node-drop-rate 0.2 --recovery-ratio 0.5 --repair-policy adaptive --max-edges-per-recovered-node 5
+```

@@ -26,6 +26,7 @@ from src.models import GAT, GCN, GraphSAGE, LLM_GNN, MLP
 from scripts.preprocess.preprocess_arxiv import preprocess_arxiv, sample_arxiv_subgraph
 from scripts.preprocess.preprocess_citation import preprocess_citation
 from scripts.preprocess.preprocess_wikics import get_wikics_split, preprocess_wikics
+from src.cold_start import ColdStartPipelineConfig, build_cold_start_training_state_from_config, safe_nanmean
 
 torch.serialization.add_safe_globals(
     [DataEdgeAttr, DataTensorAttr, Data, GlobalStorage, NodeStorage, EdgeStorage]
@@ -254,6 +255,8 @@ def train_and_eval(
     max_edges_per_recovered_node=5,
     repair_policy="fixed",
     adaptive_threshold_alpha=0.0,
+    cold_start_config=None,
+    seed=0,
 ):
     device = config.DEVICE
     sparse_edge, dropped_node_mask = build_corrupted_graph(
@@ -266,12 +269,53 @@ def train_and_eval(
         candidate_node_mask = candidate_node_mask & data.semantic_candidate_mask
     observed_train_mask = data.train_mask & ~dropped_node_mask
     train_mask = observed_train_mask
+    train_y = data.y.clone()
     successful_recovered_mask = torch.zeros_like(dropped_node_mask)
     sampled_recovered_mask = torch.zeros_like(dropped_node_mask)
     added_recovery_edges = 0
     model_edge_index = sparse_edge
+    cold_start_train_mask = data.train_mask & dropped_node_mask
+    label_ready_mask = torch.zeros_like(dropped_node_mask)
+    pseudo_train_mask = torch.zeros_like(dropped_node_mask)
+    pseudo_label_accuracy = float("nan")
+    pseudo_label_confidence_mean = float("nan")
+    selected_center_distance_mean = float("nan")
 
-    if is_repair_model(model_type):
+    if is_repair_model(model_type) and cold_start_config is not None:
+        if hasattr(data, "repair_target_mask"):
+            cold_start_train_mask = cold_start_train_mask & data.repair_target_mask
+        state = build_cold_start_training_state_from_config(
+            x_llm=data.x_llm,
+            y=data.y,
+            sparse_edge_index=sparse_edge,
+            cold_start_mask=cold_start_train_mask,
+            observed_train_mask=observed_train_mask,
+            candidate_node_mask=candidate_node_mask,
+            num_classes=int(data.y.max().item() + 1),
+            pipeline_config=cold_start_config,
+            seed=seed,
+            observed_node_count=int((~dropped_node_mask).sum().item()),
+        )
+        model_edge_index = state["edge_index"]
+        train_mask = state["train_mask"]
+        train_y = state["pseudo_y"]
+        sampled_recovered_mask = state["selected_mask"]
+        successful_recovered_mask = state["successful_recovered_mask"]
+        label_ready_mask = state["label_ready_mask"]
+        pseudo_train_mask = state["pseudo_train_mask"]
+        added_recovery_edges = int(state["added_recovery_edges"])
+
+        pseudo_nodes = torch.nonzero(pseudo_train_mask, as_tuple=False).view(-1)
+        if pseudo_nodes.numel() > 0:
+            pseudo_label_accuracy = (
+                state["pseudo_y"][pseudo_nodes] == data.y[pseudo_nodes]
+            ).float().mean().item()
+            pseudo_label_confidence_mean = state["pseudo_confidence"][pseudo_nodes].mean().item()
+            center_distance = state["center_distance"][pseudo_nodes]
+            finite_center_distance = center_distance[torch.isfinite(center_distance)]
+            if finite_center_distance.numel() > 0:
+                selected_center_distance_mean = finite_center_distance.mean().item()
+    elif is_repair_model(model_type):
         sampled_recovered_mask = sample_recovered_nodes(data, dropped_node_mask, recovery_ratio)
         model_edge_index, successful_recovered_mask, added_recovery_edges = build_threshold_recovery_edges(
             x_llm=data.x_llm,
@@ -297,6 +341,7 @@ def train_and_eval(
         edge_index=model_edge_index.to(device),
         original_edge_index=data.edge_index.to(device),
         y=data.y.to(device),
+        train_y=train_y.to(device),
         train_mask=train_mask.to(device),
         val_mask=data.val_mask.to(device),
         test_mask=data.test_mask.to(device),
@@ -306,6 +351,11 @@ def train_and_eval(
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config.LEARNING_RATE, weight_decay=config.WEIGHT_DECAY)
     x = exp_data.x_llm if use_llm else exp_data.x
+    if not train_mask.any():
+        raise RuntimeError(
+            "No training nodes remain after graph corruption. "
+            "Lower --node-drop-rate, raise --admission-ratio, or lower --pseudo-label-confidence."
+        )
     best_val = 0.0
     best_test = 0.0
     effective_train_mask = train_mask.clone()
@@ -322,7 +372,7 @@ def train_and_eval(
         else:
             out = model(x, exp_data.edge_index)
             effective_train_mask = train_mask
-        loss = F.cross_entropy(out[effective_train_mask], exp_data.y[effective_train_mask])
+        loss = F.cross_entropy(out[effective_train_mask], exp_data.train_y[effective_train_mask])
         loss.backward()
         optimizer.step()
 
@@ -351,16 +401,22 @@ def train_and_eval(
     gc.collect()
     observed_train_count = int(observed_train_mask.sum().item())
     effective_train_count = int(effective_train_mask.sum().item())
-    return (
-        best_test,
-        sparse_edge.size(1),
-        int(dropped_node_mask.sum().item()),
-        effective_train_count,
-        observed_train_count,
-        int(sampled_recovered_mask.sum().item()),
-        int(successful_recovered_mask.sum().item()),
-        int(added_recovery_edges),
-    )
+    return {
+        "accuracy": best_test,
+        "sparse_edges": sparse_edge.size(1),
+        "dropped_nodes": int(dropped_node_mask.sum().item()),
+        "train_nodes": effective_train_count,
+        "observed_train_nodes": observed_train_count,
+        "cold_start_train_nodes": int(cold_start_train_mask.sum().item()),
+        "sampled_recovered_nodes": int(sampled_recovered_mask.sum().item()),
+        "label_ready_nodes": int(label_ready_mask.sum().item()),
+        "successful_recovered_nodes": int(successful_recovered_mask.sum().item()),
+        "pseudo_train_nodes": int(pseudo_train_mask.sum().item()),
+        "recovery_edges": int(added_recovery_edges),
+        "pseudo_label_accuracy": pseudo_label_accuracy,
+        "pseudo_label_confidence_mean": pseudo_label_confidence_mean,
+        "selected_center_distance_mean": selected_center_distance_mean,
+    }
 
 
 def main():
@@ -378,6 +434,26 @@ def main():
     parser.add_argument("--max-edges-per-recovered-node", type=int, default=5)
     parser.add_argument("--repair-policy", type=str, default="fixed", choices=["fixed", "adaptive"])
     parser.add_argument("--adaptive-threshold-alpha", type=float, default=0.0)
+    parser.add_argument(
+        "--cold-start",
+        action="store_true",
+        help="Use text-only cold-start admission and pseudo-labeling for recovered training nodes.",
+    )
+    parser.add_argument("--admission-ratio", type=float, default=0.5)
+    parser.add_argument(
+        "--admission-strategy",
+        type=str,
+        default="cluster_representative",
+        choices=["cluster_representative", "random"],
+    )
+    parser.add_argument(
+        "--pseudo-label-strategy",
+        type=str,
+        default="cluster_majority",
+        choices=["cluster_majority", "nearest_labeled", "class_centroid"],
+    )
+    parser.add_argument("--pseudo-label-k", type=int, default=5)
+    parser.add_argument("--pseudo-label-confidence", type=float, default=0.0)
     parser.add_argument(
         "--model-filter",
         type=str,
@@ -428,11 +504,21 @@ def main():
     print(f"Splits: {split_indices}")
     print(f"k neighbors: {args.k_neighbors}")
     print(f"beta: {args.beta:.2f}")
-    print(f"recovery ratio: {args.recovery_ratio:.2f}")
+    if args.cold_start:
+        print("recovery ratio: unused with cold-start admission")
+    else:
+        print(f"recovery ratio: {args.recovery_ratio:.2f}")
     print(f"repair policy: {args.repair_policy}")
     print(f"similarity threshold: {args.similarity_threshold:.2f}")
     print(f"adaptive threshold alpha: {args.adaptive_threshold_alpha:.2f}")
     print(f"max edges per recovered node: {args.max_edges_per_recovered_node}")
+    print(f"cold-start pipeline: {args.cold_start}")
+    if args.cold_start:
+        print(f"admission: {args.admission_strategy} ratio={args.admission_ratio:.2f}")
+        print(
+            f"pseudo labels: {args.pseudo_label_strategy} "
+            f"k={args.pseudo_label_k} confidence>={args.pseudo_label_confidence:.2f}"
+        )
 
     models = [
         ("MLP (Raw)", "MLP", False),
@@ -462,6 +548,21 @@ def main():
     elif args.model_filter == "sage":
         models = [model for model in models if model[1] == "SAGE"]
 
+    cold_start_config = None
+    if args.cold_start:
+        cold_start_config = ColdStartPipelineConfig(
+            admission_ratio=args.admission_ratio,
+            admission_strategy=args.admission_strategy,
+            pseudo_label_strategy=args.pseudo_label_strategy,
+            pseudo_label_k=args.pseudo_label_k,
+            pseudo_label_confidence=args.pseudo_label_confidence,
+            k_neighbors=args.k_neighbors,
+            similarity_threshold=args.similarity_threshold,
+            max_edges_per_node=args.max_edges_per_recovered_node,
+            repair_policy=args.repair_policy,
+            adaptive_threshold_alpha=args.adaptive_threshold_alpha,
+        )
+
     rows = []
     for model_name, model_type, use_llm in models:
         print(f"\n{model_name}")
@@ -470,24 +571,21 @@ def main():
         dropped_nodes = []
         train_nodes = []
         observed_train_nodes = []
+        cold_start_train_nodes = []
         sampled_recovered_nodes = []
+        label_ready_nodes = []
         successful_recovered_nodes = []
+        pseudo_train_nodes = []
         recovery_edges = []
+        pseudo_label_accuracies = []
+        pseudo_label_confidences = []
+        selected_center_distances = []
         for split_idx in split_indices:
             split_data = get_wikics_split(data, split_idx) if args.dataset == "wikics" else data
             split_accs = []
             for seed in range(args.num_runs):
                 config.set_seed(seed + split_idx * 100)
-                (
-                    acc,
-                    sparse_edges,
-                    num_dropped_nodes,
-                    num_train_nodes,
-                    num_observed_train_nodes,
-                    num_sampled_recovered_nodes,
-                    num_successful_recovered_nodes,
-                    num_recovery_edges,
-                ) = train_and_eval(
+                result = train_and_eval(
                     data=split_data,
                     model_type=model_type,
                     use_llm=use_llm,
@@ -501,24 +599,34 @@ def main():
                     max_edges_per_recovered_node=args.max_edges_per_recovered_node,
                     repair_policy=args.repair_policy,
                     adaptive_threshold_alpha=args.adaptive_threshold_alpha,
+                    cold_start_config=cold_start_config if is_repair_model(model_type) else None,
+                    seed=seed + split_idx * 100,
                 )
+                acc = result["accuracy"]
                 split_accs.append(acc)
                 accs.append(acc)
-                kept_edges.append(sparse_edges)
-                dropped_nodes.append(num_dropped_nodes)
-                train_nodes.append(num_train_nodes)
-                observed_train_nodes.append(num_observed_train_nodes)
-                sampled_recovered_nodes.append(num_sampled_recovered_nodes)
-                successful_recovered_nodes.append(num_successful_recovered_nodes)
-                recovery_edges.append(num_recovery_edges)
+                kept_edges.append(result["sparse_edges"])
+                dropped_nodes.append(result["dropped_nodes"])
+                train_nodes.append(result["train_nodes"])
+                observed_train_nodes.append(result["observed_train_nodes"])
+                cold_start_train_nodes.append(result["cold_start_train_nodes"])
+                sampled_recovered_nodes.append(result["sampled_recovered_nodes"])
+                label_ready_nodes.append(result["label_ready_nodes"])
+                successful_recovered_nodes.append(result["successful_recovered_nodes"])
+                pseudo_train_nodes.append(result["pseudo_train_nodes"])
+                recovery_edges.append(result["recovery_edges"])
+                pseudo_label_accuracies.append(result["pseudo_label_accuracy"])
+                pseudo_label_confidences.append(result["pseudo_label_confidence_mean"])
+                selected_center_distances.append(result["selected_center_distance_mean"])
                 print(
                     f"  split={split_idx} seed={seed}: "
-                    f"acc={acc * 100:.2f}% sparse_edges={sparse_edges} "
-                    f"dropped_nodes={num_dropped_nodes} train_nodes={num_train_nodes} "
-                    f"observed_train_nodes={num_observed_train_nodes} "
-                    f"sampled_recovered={num_sampled_recovered_nodes} "
-                    f"successful_recovered={num_successful_recovered_nodes} "
-                    f"recovery_edges={num_recovery_edges}"
+                    f"acc={acc * 100:.2f}% sparse_edges={result['sparse_edges']} "
+                    f"dropped_nodes={result['dropped_nodes']} train_nodes={result['train_nodes']} "
+                    f"observed_train_nodes={result['observed_train_nodes']} "
+                    f"sampled_recovered={result['sampled_recovered_nodes']} "
+                    f"successful_recovered={result['successful_recovered_nodes']} "
+                    f"pseudo_train={result['pseudo_train_nodes']} "
+                    f"recovery_edges={result['recovery_edges']}"
                 )
             print(
                 f"  split={split_idx} mean={np.mean(split_accs) * 100:.2f}% "
@@ -538,14 +646,26 @@ def main():
                 "dropped_nodes_mean": float(np.mean(dropped_nodes)),
                 "train_nodes_mean": float(np.mean(train_nodes)),
                 "observed_train_nodes_mean": float(np.mean(observed_train_nodes)),
+                "cold_start_train_nodes_mean": float(np.mean(cold_start_train_nodes)),
                 "sampled_recovered_nodes_mean": float(np.mean(sampled_recovered_nodes)),
+                "label_ready_nodes_mean": float(np.mean(label_ready_nodes)),
                 "successful_recovered_nodes_mean": float(np.mean(successful_recovered_nodes)),
+                "pseudo_train_nodes_mean": float(np.mean(pseudo_train_nodes)),
                 "recovery_edges_mean": float(np.mean(recovery_edges)),
+                "pseudo_label_accuracy_mean": safe_nanmean(pseudo_label_accuracies),
+                "pseudo_label_confidence_mean": safe_nanmean(pseudo_label_confidences),
+                "selected_center_distance_mean": safe_nanmean(selected_center_distances),
                 "splits": ",".join(str(x) for x in split_indices),
                 "num_runs": args.num_runs,
                 "k_neighbors": args.k_neighbors,
                 "beta": args.beta,
-                "recovery_ratio": args.recovery_ratio,
+                "recovery_ratio": np.nan if args.cold_start else args.recovery_ratio,
+                "cold_start": bool(args.cold_start),
+                "admission_ratio": args.admission_ratio if args.cold_start else np.nan,
+                "admission_strategy": args.admission_strategy if args.cold_start else "",
+                "pseudo_label_strategy": args.pseudo_label_strategy if args.cold_start else "",
+                "pseudo_label_k": args.pseudo_label_k if args.cold_start else np.nan,
+                "pseudo_label_confidence": args.pseudo_label_confidence if args.cold_start else np.nan,
                 "repair_policy": args.repair_policy,
                 "similarity_threshold": args.similarity_threshold,
                 "adaptive_threshold_alpha": args.adaptive_threshold_alpha,
@@ -560,7 +680,8 @@ def main():
         PROJECT_ROOT
         / "logs"
         / (
-            f"{args.dataset}_single_pilot_drop{int(args.drop_rate * 100)}"
+            f"{args.dataset}_single_pilot{'_coldstart' if args.cold_start else ''}"
+            f"_drop{int(args.drop_rate * 100)}"
             f"_node{int(args.node_drop_rate * 100)}_{timestamp}.csv"
         )
     )
@@ -578,8 +699,10 @@ def main():
                 "observed_train_nodes_mean",
                 "train_nodes_mean",
                 "sampled_recovered_nodes_mean",
+                "pseudo_train_nodes_mean",
                 "successful_recovered_nodes_mean",
                 "recovery_edges_mean",
+                "pseudo_label_accuracy_mean",
             ]
         ].to_string(index=False)
     )
