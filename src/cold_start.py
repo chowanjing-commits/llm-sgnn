@@ -186,7 +186,7 @@ def select_cold_start_nodes(x_llm, cold_start_mask, num_classes, admission_ratio
 
 def pseudo_label_by_nearest_labeled(x_llm, observed_train_mask, selected_mask, y, num_classes, k):
     pseudo_y = y.clone()
-    confidence = torch.zeros_like(y, dtype=torch.float)
+    confidence = torch.full_like(y, float("nan"), dtype=torch.float)
     train_nodes = torch.nonzero(observed_train_mask, as_tuple=False).view(-1).cpu()
     selected_nodes = torch.nonzero(selected_mask, as_tuple=False).view(-1).cpu()
     if train_nodes.numel() == 0 or selected_nodes.numel() == 0:
@@ -207,7 +207,7 @@ def pseudo_label_by_nearest_labeled(x_llm, observed_train_mask, selected_mask, y
 
 def pseudo_label_by_class_centroid(x_llm, observed_train_mask, selected_mask, y, num_classes):
     pseudo_y = y.clone()
-    confidence = torch.zeros_like(y, dtype=torch.float)
+    confidence = torch.full_like(y, float("nan"), dtype=torch.float)
     selected_nodes = torch.nonzero(selected_mask, as_tuple=False).view(-1).cpu()
     if selected_nodes.numel() == 0:
         return pseudo_y, confidence
@@ -245,7 +245,7 @@ def pseudo_label_by_cluster_majority(
     seed,
 ):
     pseudo_y = y.clone()
-    confidence = torch.zeros_like(y, dtype=torch.float)
+    confidence = torch.full_like(y, float("nan"), dtype=torch.float)
     active_mask = observed_train_mask | selected_mask
     active_nodes = torch.nonzero(active_mask, as_tuple=False).view(-1).cpu()
     selected_nodes = torch.nonzero(selected_mask, as_tuple=False).view(-1).cpu()
@@ -461,7 +461,9 @@ def build_cold_start_training_state(
         pseudo_label_k=pseudo_label_k,
         seed=seed,
     )
-    label_ready_mask = selected_mask & (pseudo_confidence >= pseudo_label_confidence)
+    label_ready_mask = selected_mask & torch.isfinite(pseudo_confidence) & (
+        pseudo_confidence >= pseudo_label_confidence
+    )
     repaired_edge_index, successful_recovered_mask, added_recovery_edges = build_semantic_recovery_edges(
         x_llm=x_llm,
         sparse_edge_index=sparse_edge_index,

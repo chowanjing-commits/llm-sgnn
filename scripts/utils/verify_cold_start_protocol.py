@@ -52,8 +52,10 @@ def build_toy_inputs():
     return x_llm, y, sparse_edge_index, observed_train_mask, cold_start_mask, candidate_node_mask
 
 
-def run_pipeline(y):
+def run_pipeline(y, observed_train_mask_override=None):
     x_llm, _, sparse_edge_index, observed_train_mask, cold_start_mask, candidate_node_mask = build_toy_inputs()
+    if observed_train_mask_override is not None:
+        observed_train_mask = observed_train_mask_override
     config = ColdStartPipelineConfig(
         admission_ratio=1.0,
         admission_strategy="cluster_representative",
@@ -110,6 +112,12 @@ def main():
         raise AssertionError("cold-start training nodes must enter only through pseudo_train_mask")
     if not torch.equal(observed_train_mask | baseline["pseudo_train_mask"], baseline["train_mask"]):
         raise AssertionError("train_mask must be observed_train_mask union pseudo_train_mask")
+
+    no_observed = run_pipeline(y, torch.zeros_like(observed_train_mask))
+    if no_observed["pseudo_train_mask"].any():
+        raise AssertionError("cold-start nodes without inferred pseudo labels must not enter training")
+    if no_observed["train_mask"].any():
+        raise AssertionError("train_mask must stay empty when no observed or pseudo-labeled nodes exist")
 
     print("Cold-start protocol verification passed.")
 

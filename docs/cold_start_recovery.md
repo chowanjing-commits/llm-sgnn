@@ -435,6 +435,9 @@ Protocol audit:
   `cluster_majority`, `nearest_labeled`, or `class_centroid`.
 - Ground-truth labels of cold-start nodes are used only to compute
   `pseudo_label_accuracy_mean`.
+- If no finite pseudo-label confidence is produced for an admitted node, that
+  node is excluded from `pseudo_train_mask` even when the confidence threshold is
+  `0.0`; this prevents default labels from leaking into the supervised loss.
 - `cluster_representative` and `random` share the same `admission_ratio` budget.
 - Full arXiv runs use `--arxiv-subgraph-size 0`.
 
