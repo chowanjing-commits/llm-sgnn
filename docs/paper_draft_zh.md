@@ -627,6 +627,28 @@ b = \min(k,\ b_{max},\ \lceil d_{obs} \rceil).
 
 该扩展实验支持两个结论。第一，文本-only 冷启动节点不宜无筛选地全部加入；在 Cora、WikiCS、ogbn-arxiv-10k 和完整 ogbn-arxiv 上，准确率随准入比例过高而下降，说明伪标签噪声和语义边噪声会累积。第二，聚类代表准入在中等预算下最有价值，尤其在完整 ogbn-arxiv 的 0.50 预算下比随机准入高 4.15 个百分点。该结果补充了正文的受控恢复叙事：语言模型表征不仅可用于缺失训练节点的结构恢复，也可作为文本-only 新节点准入的代表性筛选信号，但它需要显式预算和伪标签质量控制。
 
+为确认该扩展不是孤立实验脚本，本文还将冷启动流程接入主训练入口 `run_single_dataset_pilot.py`。开启 `--cold-start` 后，Ours 系列模型使用冷启动流程生成的恢复边、伪标签和训练掩码进行训练，而不是使用被隐藏节点的真实标签。表 D3 报告准入比例 0.50 下的主入口集成验证结果。
+
+**表 D3. 主训练入口下的文本-only 冷启动集成验证。**
+
+| 数据集 | 骨干 | 准确率 | 观测训练节点 | 伪标签训练节点 | 新增语义边 | 伪标签准确率 |
+|---|---|---:|---:|---:|---:|---:|
+| Cora | GCN | 55.50 ± 6.95 | 40.0 | 50.0 | 99.7 | 38.00 |
+| Cora | GAT | 57.80 ± 9.14 | 40.0 | 50.0 | 99.7 | 38.00 |
+| Cora | GraphSAGE | 50.23 ± 9.21 | 40.0 | 50.0 | 99.7 | 38.00 |
+| PubMed | GCN | 54.23 ± 14.99 | 15.0 | 22.0 | 45.7 | 40.91 |
+| PubMed | GAT | 57.00 ± 11.21 | 15.0 | 22.0 | 45.7 | 40.91 |
+| PubMed | GraphSAGE | 53.10 ± 15.01 | 15.0 | 22.0 | 45.7 | 40.91 |
+| WikiCS | GCN | 60.52 ± 3.71 | 145.0 | 217.0 | 461.3 | 50.69 |
+| WikiCS | GAT | 59.31 ± 1.94 | 145.0 | 217.0 | 461.3 | 50.69 |
+| WikiCS | GraphSAGE | 57.79 ± 2.47 | 145.0 | 217.0 | 461.3 | 50.69 |
+| ogbn-arxiv-10k | GCN | 47.09 ± 0.55 | 1315.0 | 1971.0 | 1971.0 | 46.68 |
+| ogbn-arxiv-10k | GAT | 46.47 ± 0.60 | 1315.0 | 1971.0 | 1971.0 | 46.68 |
+| ogbn-arxiv-10k | GraphSAGE | 47.45 ± 0.49 | 1315.0 | 1971.0 | 1971.0 | 46.68 |
+| ogbn-arxiv-full | GraphSAGE | 54.91 ± 0.45 | 22736.0 | 34102.0 | 71104.0 | 46.99 |
+
+表注：实验使用节点缺失率 0.75、准入比例 0.50、三随机种子和 100 轮训练。准确率和伪标签准确率单位为百分比；伪标签准确率仅用于离线诊断，不参与训练。完整 ogbn-arxiv 先报告 GraphSAGE 骨干，用于验证完整图链路。
+
 ## 附录 E. 复现材料与结果文件
 
 为便于阶段性复现，表 E1 汇总本文当前使用的轻量结果文件和说明。大规模原始数据、模型权重、缓存 embedding 和 checkpoint 不纳入正文附录表，也不建议纳入版本控制。
@@ -653,7 +675,13 @@ b = \min(k,\ b_{max},\ \lceil d_{obs} \rceil).
 | 冷启动准入 | `logs/conda_cold_start_wikics_budget_summary_20260528_235716.csv` | 生成表 D1-D2 的 WikiCS 结果 |
 | 冷启动准入 | `logs/conda_cold_start_arxiv10k_budget_summary_20260529_000157.csv` | 生成表 D1-D2 的 ogbn-arxiv-10k 结果 |
 | 冷启动准入 | `logs/conda_cold_start_arxiv_full_budget_summary_20260529_001323.csv` | 生成表 D1-D2 的完整 ogbn-arxiv 结果 |
+| 冷启动主入口 | `logs/cora_single_pilot_coldstart_drop0_node75_20260529_162920.csv` | 生成表 D3 的 Cora 主入口集成结果 |
+| 冷启动主入口 | `logs/pubmed_single_pilot_coldstart_drop0_node75_20260529_163005.csv` | 生成表 D3 的 PubMed 主入口集成结果 |
+| 冷启动主入口 | `logs/wikics_single_pilot_coldstart_drop0_node75_20260529_163050.csv` | 生成表 D3 的 WikiCS 主入口集成结果 |
+| 冷启动主入口 | `logs/arxiv_single_pilot_coldstart_drop0_node75_20260529_163122.csv` | 生成表 D3 的 ogbn-arxiv-10k 主入口集成结果 |
+| 冷启动主入口 | `logs/arxiv_single_pilot_coldstart_drop0_node75_20260529_163259.csv` | 生成表 D3 的完整 ogbn-arxiv 主入口集成结果 |
 | 冷启动准入 | `src/cold_start.py` | 文本特征生成、冷启动配置、准入、伪标签、语义连边和训练掩码构造组件 |
+| 冷启动主入口 | `scripts/utils/run_single_dataset_pilot.py` | 支持 `--cold-start` 的主训练入口，用于从主方法路径调用冷启动流程 |
 | 冷启动准入 | `scripts/utils/summarize_cold_start_budget.py` | 从冷启动预算 CSV 生成表 D1-D2 的 Markdown |
 
 表注：表中列出的 CSV 均为轻量结果记录，适合随代码和论文草稿保存。完整 embedding、原始数据和本地下载的生成模型体积较大，应通过数据准备脚本或外部存储管理。

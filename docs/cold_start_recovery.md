@@ -363,6 +363,46 @@ Interpretation:
   equivalent. Small downstream accuracy differences can still appear from later
   stochastic training.
 
+## Main-Method Integration Runs
+
+The following runs validate that the cold-start pipeline is reachable from the
+main single-dataset runner rather than only from the standalone budget script.
+All commands used `conda run -n llm-sgnn`, `--cold-start`,
+`--admission-ratio 0.5`, `--node-drop-rate 0.75`, `--drop-rate 0.0`,
+`--repair-policy adaptive`, `--max-edges-per-recovered-node 10`, 3 seeds, and
+100 epochs.
+
+Output files:
+
+- `logs/cora_single_pilot_coldstart_drop0_node75_20260529_162920.csv`
+- `logs/pubmed_single_pilot_coldstart_drop0_node75_20260529_163005.csv`
+- `logs/wikics_single_pilot_coldstart_drop0_node75_20260529_163050.csv`
+- `logs/arxiv_single_pilot_coldstart_drop0_node75_20260529_163122.csv`
+- `logs/arxiv_single_pilot_coldstart_drop0_node75_20260529_163259.csv`
+
+| Dataset | Backbone | Accuracy | Std | Observed train | Pseudo-train | Recovery edges | Pseudo-label acc. |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Cora | GCN | 0.5550 | 0.0695 | 40.0 | 50.0 | 99.7 | 0.3800 |
+| Cora | GAT | 0.5780 | 0.0914 | 40.0 | 50.0 | 99.7 | 0.3800 |
+| Cora | GraphSAGE | 0.5023 | 0.0921 | 40.0 | 50.0 | 99.7 | 0.3800 |
+| PubMed | GCN | 0.5423 | 0.1499 | 15.0 | 22.0 | 45.7 | 0.4091 |
+| PubMed | GAT | 0.5700 | 0.1121 | 15.0 | 22.0 | 45.7 | 0.4091 |
+| PubMed | GraphSAGE | 0.5310 | 0.1501 | 15.0 | 22.0 | 45.7 | 0.4091 |
+| WikiCS | GCN | 0.6052 | 0.0371 | 145.0 | 217.0 | 461.3 | 0.5069 |
+| WikiCS | GAT | 0.5931 | 0.0194 | 145.0 | 217.0 | 461.3 | 0.5069 |
+| WikiCS | GraphSAGE | 0.5779 | 0.0247 | 145.0 | 217.0 | 461.3 | 0.5069 |
+| arXiv-10k | GCN | 0.4709 | 0.0055 | 1315.0 | 1971.0 | 1971.0 | 0.4668 |
+| arXiv-10k | GAT | 0.4647 | 0.0060 | 1315.0 | 1971.0 | 1971.0 | 0.4668 |
+| arXiv-10k | GraphSAGE | 0.4745 | 0.0049 | 1315.0 | 1971.0 | 1971.0 | 0.4668 |
+| arXiv-full | GraphSAGE | 0.5491 | 0.0045 | 22736.0 | 34102.0 | 71104.0 | 0.4699 |
+
+These results are integration checks, not a replacement for the budget ablation
+above. They show that the main runner can execute the full path:
+cached/raw-text features -> admission -> pseudo labels -> semantic edges ->
+training with pseudo labels. The full arXiv GraphSAGE run matches the standalone
+full-graph budget scale at ratio `0.50`, which supports using the integrated
+runner for later main-method experiments.
+
 ## Review Notes
 
 Protocol audit:
