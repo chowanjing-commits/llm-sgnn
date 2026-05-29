@@ -24,6 +24,31 @@
 pip install -r requirements.txt
 ```
 
+## Cold-Start Main Path
+
+Development happens on `method-next`. Do not modify `main` directly.
+
+Run the text-only cold-start path through the main single-dataset runner:
+
+```powershell
+conda run -n llm-sgnn python scripts\utils\run_single_dataset_pilot.py `
+  --dataset cora `
+  --model-filter ours_gcn `
+  --num-runs 1 `
+  --num-epochs 1 `
+  --drop-rate 0.1 `
+  --node-drop-rate 0.2 `
+  --cold-start `
+  --admission-ratio 0.5 `
+  --repair-policy adaptive `
+  --max-edges-per-recovered-node 5
+```
+
+Add `--force-regenerate-embeddings` to verify the raw-text-to-feature segment
+before cold-start admission, pseudo-labeling, semantic edge recovery, and GNN
+training. Detailed protocol notes and result tables are in
+`docs/cold_start_recovery.md` and `docs/paper_draft_zh.md`.
+
 ## 项目结构
 
 ```
