@@ -38,6 +38,10 @@ Formal experiments should use the project environment:
 conda run -n llm-sgnn python scripts\utils\run_cold_start_recovery.py
 ```
 
+The reusable method components live in `src/cold_start.py`; the script above is
+an experiment runner that loads datasets, calls these components, trains the
+GNN, and writes CSV results.
+
 By default, the script reuses cached text-derived embeddings when available.
 To exercise the full raw-text-to-feature path before admission and edge recovery,
 pass:
@@ -337,6 +341,8 @@ Interpretation:
 
 Protocol audit:
 
+- Cold-start admission and pseudo-labeling are implemented in `src/cold_start.py`
+  so they can be reused outside the experiment runner.
 - Cold-start admission uses only `x_llm` and the cold-start candidate mask.
 - `x_llm` can be loaded from cache or regenerated from raw text with
   `--force-regenerate-embeddings`.

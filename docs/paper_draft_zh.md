@@ -653,6 +653,7 @@ b = \min(k,\ b_{max},\ \lceil d_{obs} \rceil).
 | 冷启动准入 | `logs/conda_cold_start_wikics_budget_summary_20260528_235716.csv` | 生成表 D1-D2 的 WikiCS 结果 |
 | 冷启动准入 | `logs/conda_cold_start_arxiv10k_budget_summary_20260529_000157.csv` | 生成表 D1-D2 的 ogbn-arxiv-10k 结果 |
 | 冷启动准入 | `logs/conda_cold_start_arxiv_full_budget_summary_20260529_001323.csv` | 生成表 D1-D2 的完整 ogbn-arxiv 结果 |
+| 冷启动准入 | `src/cold_start.py` | 冷启动准入与伪标签主方法组件 |
 | 冷启动准入 | `scripts/utils/summarize_cold_start_budget.py` | 从冷启动预算 CSV 生成表 D1-D2 的 Markdown |
 
 表注：表中列出的 CSV 均为轻量结果记录，适合随代码和论文草稿保存。完整 embedding、原始数据和本地下载的生成模型体积较大，应通过数据准备脚本或外部存储管理。
