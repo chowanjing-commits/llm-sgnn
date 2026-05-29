@@ -389,6 +389,8 @@ Output files:
 - `logs/pubmed_single_pilot_coldstart_drop0_node75_20260529_163005.csv`
 - `logs/wikics_single_pilot_coldstart_drop0_node75_20260529_163050.csv`
 - `logs/arxiv_single_pilot_coldstart_drop0_node75_20260529_163122.csv`
+- `logs/arxiv_single_pilot_coldstart_drop0_node75_20260529_164957.csv`
+- `logs/arxiv_single_pilot_coldstart_drop0_node75_20260529_165236.csv`
 - `logs/arxiv_single_pilot_coldstart_drop0_node75_20260529_163259.csv`
 
 | Dataset | Backbone | Accuracy | Std | Observed train | Pseudo-train | Recovery edges | Pseudo-label acc. |
@@ -405,6 +407,8 @@ Output files:
 | arXiv-10k | GCN | 0.4709 | 0.0055 | 1315.0 | 1971.0 | 1971.0 | 0.4668 |
 | arXiv-10k | GAT | 0.4647 | 0.0060 | 1315.0 | 1971.0 | 1971.0 | 0.4668 |
 | arXiv-10k | GraphSAGE | 0.4745 | 0.0049 | 1315.0 | 1971.0 | 1971.0 | 0.4668 |
+| arXiv-full | GCN | 0.5369 | 0.0050 | 22736.0 | 34102.0 | 71104.0 | 0.4699 |
+| arXiv-full | GAT | 0.5358 | 0.0051 | 22736.0 | 34102.0 | 71104.0 | 0.4699 |
 | arXiv-full | GraphSAGE | 0.5491 | 0.0045 | 22736.0 | 34102.0 | 71104.0 | 0.4699 |
 
 These results are integration checks, not a replacement for the budget ablation

@@ -645,9 +645,11 @@ b = \min(k,\ b_{max},\ \lceil d_{obs} \rceil).
 | ogbn-arxiv-10k | GCN | 47.09 ± 0.55 | 1315.0 | 1971.0 | 1971.0 | 46.68 |
 | ogbn-arxiv-10k | GAT | 46.47 ± 0.60 | 1315.0 | 1971.0 | 1971.0 | 46.68 |
 | ogbn-arxiv-10k | GraphSAGE | 47.45 ± 0.49 | 1315.0 | 1971.0 | 1971.0 | 46.68 |
+| ogbn-arxiv-full | GCN | 53.69 ± 0.50 | 22736.0 | 34102.0 | 71104.0 | 46.99 |
+| ogbn-arxiv-full | GAT | 53.58 ± 0.51 | 22736.0 | 34102.0 | 71104.0 | 46.99 |
 | ogbn-arxiv-full | GraphSAGE | 54.91 ± 0.45 | 22736.0 | 34102.0 | 71104.0 | 46.99 |
 
-表注：实验使用节点缺失率 0.75、准入比例 0.50、三随机种子和 100 轮训练。准确率和伪标签准确率单位为百分比；伪标签准确率仅用于离线诊断，不参与训练。完整 ogbn-arxiv 先报告 GraphSAGE 骨干，用于验证完整图链路。
+表注：实验使用节点缺失率 0.75、准入比例 0.50、三随机种子和 100 轮训练。准确率和伪标签准确率单位为百分比；伪标签准确率仅用于离线诊断，不参与训练。完整 ogbn-arxiv 覆盖 GCN、GAT 和 GraphSAGE 三种骨干。
 
 ## 附录 E. 复现材料与结果文件
 
@@ -679,6 +681,8 @@ b = \min(k,\ b_{max},\ \lceil d_{obs} \rceil).
 | 冷启动主入口 | `logs/pubmed_single_pilot_coldstart_drop0_node75_20260529_163005.csv` | 生成表 D3 的 PubMed 主入口集成结果 |
 | 冷启动主入口 | `logs/wikics_single_pilot_coldstart_drop0_node75_20260529_163050.csv` | 生成表 D3 的 WikiCS 主入口集成结果 |
 | 冷启动主入口 | `logs/arxiv_single_pilot_coldstart_drop0_node75_20260529_163122.csv` | 生成表 D3 的 ogbn-arxiv-10k 主入口集成结果 |
+| 冷启动主入口 | `logs/arxiv_single_pilot_coldstart_drop0_node75_20260529_164957.csv` | 生成表 D3 的完整 ogbn-arxiv GCN 主入口集成结果 |
+| 冷启动主入口 | `logs/arxiv_single_pilot_coldstart_drop0_node75_20260529_165236.csv` | 生成表 D3 的完整 ogbn-arxiv GAT 主入口集成结果 |
 | 冷启动主入口 | `logs/arxiv_single_pilot_coldstart_drop0_node75_20260529_163259.csv` | 生成表 D3 的完整 ogbn-arxiv 主入口集成结果 |
 | 冷启动准入 | `src/cold_start.py` | 文本特征生成、冷启动配置、准入、伪标签、语义连边和训练掩码构造组件 |
 | 冷启动主入口 | `scripts/utils/run_single_dataset_pilot.py` | 支持 `--cold-start` 的主训练入口，用于从主方法路径调用冷启动流程 |
