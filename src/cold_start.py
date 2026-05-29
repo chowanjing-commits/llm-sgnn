@@ -5,9 +5,25 @@ These functions are method components rather than experiment runners. They only
 use text-derived node embeddings and observed training labels; hidden cold-start
 labels are not needed except by downstream diagnostics.
 """
+from dataclasses import dataclass
+
 import numpy as np
 import torch
 import torch.nn.functional as F
+
+
+@dataclass
+class ColdStartPipelineConfig:
+    admission_ratio: float = 0.5
+    admission_strategy: str = "cluster_representative"
+    pseudo_label_strategy: str = "cluster_majority"
+    pseudo_label_k: int = 5
+    pseudo_label_confidence: float = 0.0
+    k_neighbors: int = 10
+    similarity_threshold: float = 0.6
+    max_edges_per_node: int = 10
+    repair_policy: str = "adaptive"
+    adaptive_threshold_alpha: float = 0.0
 
 
 def encode_texts_with_transformer(
@@ -473,6 +489,41 @@ def build_cold_start_training_state(
         "pseudo_train_mask": pseudo_train_mask,
         "added_recovery_edges": int(added_recovery_edges),
     }
+
+
+def build_cold_start_training_state_from_config(
+    x_llm,
+    y,
+    sparse_edge_index,
+    cold_start_mask,
+    observed_train_mask,
+    candidate_node_mask,
+    num_classes,
+    pipeline_config,
+    seed,
+    observed_node_count=None,
+):
+    return build_cold_start_training_state(
+        x_llm=x_llm,
+        y=y,
+        sparse_edge_index=sparse_edge_index,
+        cold_start_mask=cold_start_mask,
+        observed_train_mask=observed_train_mask,
+        candidate_node_mask=candidate_node_mask,
+        num_classes=num_classes,
+        admission_ratio=pipeline_config.admission_ratio,
+        admission_strategy=pipeline_config.admission_strategy,
+        pseudo_label_strategy=pipeline_config.pseudo_label_strategy,
+        pseudo_label_k=pipeline_config.pseudo_label_k,
+        pseudo_label_confidence=pipeline_config.pseudo_label_confidence,
+        k_neighbors=pipeline_config.k_neighbors,
+        similarity_threshold=pipeline_config.similarity_threshold,
+        max_edges_per_node=pipeline_config.max_edges_per_node,
+        repair_policy=pipeline_config.repair_policy,
+        adaptive_threshold_alpha=pipeline_config.adaptive_threshold_alpha,
+        seed=seed,
+        observed_node_count=observed_node_count,
+    )
 
 
 def safe_nanmean(values):

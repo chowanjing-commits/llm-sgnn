@@ -34,7 +34,11 @@ from scripts.utils.run_single_dataset_pilot import (
     is_repair_model,
 )
 from src import config
-from src.cold_start import build_cold_start_training_state, safe_nanmean
+from src.cold_start import (
+    ColdStartPipelineConfig,
+    build_cold_start_training_state_from_config,
+    safe_nanmean,
+)
 
 torch.serialization.add_safe_globals(
     [DataEdgeAttr, DataTensorAttr, Data, GlobalStorage, NodeStorage, EdgeStorage]
@@ -155,14 +159,7 @@ def run_once(
         cold_start_mask = cold_start_mask & data.repair_target_mask
 
     num_classes = int(data.y.max().item() + 1)
-    state = build_cold_start_training_state(
-        x_llm=data.x_llm,
-        y=data.y,
-        sparse_edge_index=sparse_edge_index,
-        cold_start_mask=cold_start_mask,
-        observed_train_mask=observed_train_mask,
-        candidate_node_mask=candidate_node_mask,
-        num_classes=num_classes,
+    pipeline_config = ColdStartPipelineConfig(
         admission_ratio=admission_ratio,
         admission_strategy=admission_strategy,
         pseudo_label_strategy=pseudo_label_strategy,
@@ -173,6 +170,16 @@ def run_once(
         max_edges_per_node=max_edges_per_recovered_node,
         repair_policy=repair_policy,
         adaptive_threshold_alpha=adaptive_threshold_alpha,
+    )
+    state = build_cold_start_training_state_from_config(
+        x_llm=data.x_llm,
+        y=data.y,
+        sparse_edge_index=sparse_edge_index,
+        cold_start_mask=cold_start_mask,
+        observed_train_mask=observed_train_mask,
+        candidate_node_mask=candidate_node_mask,
+        num_classes=num_classes,
+        pipeline_config=pipeline_config,
         seed=seed,
         observed_node_count=int((~dropped_node_mask).sum().item()),
     )
