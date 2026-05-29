@@ -31,11 +31,10 @@ from scripts.preprocess.preprocess_wikics import get_wikics_split, preprocess_wi
 from scripts.utils.run_single_dataset_pilot import (
     build_corrupted_graph,
     build_model,
-    build_threshold_recovery_edges,
     is_repair_model,
 )
 from src import config
-from src.cold_start import assign_pseudo_labels, safe_nanmean, select_cold_start_nodes
+from src.cold_start import build_cold_start_training_state, safe_nanmean
 
 torch.serialization.add_safe_globals(
     [DataEdgeAttr, DataTensorAttr, Data, GlobalStorage, NodeStorage, EdgeStorage]
@@ -156,76 +155,63 @@ def run_once(
         cold_start_mask = cold_start_mask & data.repair_target_mask
 
     num_classes = int(data.y.max().item() + 1)
-    selected_mask, cluster_labels, center_distance = select_cold_start_nodes(
+    state = build_cold_start_training_state(
         x_llm=data.x_llm,
+        y=data.y,
+        sparse_edge_index=sparse_edge_index,
         cold_start_mask=cold_start_mask,
+        observed_train_mask=observed_train_mask,
+        candidate_node_mask=candidate_node_mask,
         num_classes=num_classes,
         admission_ratio=admission_ratio,
-        strategy=admission_strategy,
-        seed=seed,
-    )
-    pseudo_y, pseudo_confidence = assign_pseudo_labels(
-        x_llm=data.x_llm,
-        observed_train_mask=observed_train_mask,
-        selected_mask=selected_mask,
-        y=data.y,
-        num_classes=num_classes,
-        strategy=pseudo_label_strategy,
+        admission_strategy=admission_strategy,
+        pseudo_label_strategy=pseudo_label_strategy,
         pseudo_label_k=pseudo_label_k,
-        seed=seed,
-    )
-    label_ready_mask = selected_mask & (pseudo_confidence >= pseudo_label_confidence)
-
-    repaired_edge_index, successful_recovered_mask, added_recovery_edges = build_threshold_recovery_edges(
-        x_llm=data.x_llm,
-        sparse_edge_index=sparse_edge_index,
-        recovered_node_mask=selected_mask,
-        candidate_node_mask=candidate_node_mask,
+        pseudo_label_confidence=pseudo_label_confidence,
         k_neighbors=k_neighbors,
         similarity_threshold=similarity_threshold,
         max_edges_per_node=max_edges_per_recovered_node,
         repair_policy=repair_policy,
         adaptive_threshold_alpha=adaptive_threshold_alpha,
+        seed=seed,
         observed_node_count=int((~dropped_node_mask).sum().item()),
     )
-    pseudo_train_mask = label_ready_mask & successful_recovered_mask
-    train_mask = observed_train_mask | pseudo_train_mask
     accuracy = train_gnn(
         data=data,
-        edge_index=repaired_edge_index,
-        train_mask=train_mask,
-        train_y=pseudo_y,
+        edge_index=state["edge_index"],
+        train_mask=state["train_mask"],
+        train_y=state["pseudo_y"],
         num_epochs=num_epochs,
         model_type=model_type,
         k_neighbors=k_neighbors,
         beta=beta,
     )
 
+    pseudo_train_mask = state["pseudo_train_mask"]
     pseudo_nodes = torch.nonzero(pseudo_train_mask, as_tuple=False).view(-1)
     if pseudo_nodes.numel() > 0:
-        pseudo_acc = (pseudo_y[pseudo_nodes] == data.y[pseudo_nodes]).float().mean().item()
-        pseudo_conf_mean = pseudo_confidence[pseudo_nodes].mean().item()
-        center_dist_mean = center_distance[pseudo_nodes].nanmean().item()
+        pseudo_acc = (state["pseudo_y"][pseudo_nodes] == data.y[pseudo_nodes]).float().mean().item()
+        pseudo_conf_mean = state["pseudo_confidence"][pseudo_nodes].mean().item()
+        center_dist_mean = state["center_distance"][pseudo_nodes].nanmean().item()
     else:
         pseudo_acc = float("nan")
         pseudo_conf_mean = float("nan")
         center_dist_mean = float("nan")
 
-    del cluster_labels
     return {
         "accuracy": accuracy,
         "admission_strategy": admission_strategy,
         "sparse_edges": int(sparse_edge_index.size(1)),
-        "repaired_edges": int(repaired_edge_index.size(1)),
+        "repaired_edges": int(state["edge_index"].size(1)),
         "dropped_nodes": int(dropped_node_mask.sum().item()),
         "cold_start_train_nodes": int(cold_start_mask.sum().item()),
         "observed_train_nodes": int(observed_train_mask.sum().item()),
-        "selected_cold_start_nodes": int(selected_mask.sum().item()),
-        "label_ready_nodes": int(label_ready_mask.sum().item()),
-        "successful_recovered_nodes": int(successful_recovered_mask.sum().item()),
+        "selected_cold_start_nodes": int(state["selected_mask"].sum().item()),
+        "label_ready_nodes": int(state["label_ready_mask"].sum().item()),
+        "successful_recovered_nodes": int(state["successful_recovered_mask"].sum().item()),
         "pseudo_train_nodes": int(pseudo_train_mask.sum().item()),
-        "train_nodes": int(train_mask.sum().item()),
-        "recovery_edges": int(added_recovery_edges),
+        "train_nodes": int(state["train_mask"].sum().item()),
+        "recovery_edges": int(state["added_recovery_edges"]),
         "pseudo_label_accuracy": pseudo_acc,
         "pseudo_label_confidence_mean": pseudo_conf_mean,
         "selected_center_distance_mean": center_dist_mean,

@@ -250,6 +250,177 @@ def assign_pseudo_labels(
     raise ValueError(f"Unknown pseudo-label strategy: {strategy}")
 
 
+def build_semantic_recovery_edges(
+    x_llm,
+    sparse_edge_index,
+    recovered_node_mask,
+    candidate_node_mask,
+    k_neighbors,
+    similarity_threshold,
+    max_edges_per_node,
+    repair_policy="fixed",
+    adaptive_threshold_alpha=0.0,
+    observed_node_count=None,
+):
+    if not recovered_node_mask.any() or max_edges_per_node <= 0:
+        return sparse_edge_index, torch.zeros_like(recovered_node_mask), 0
+
+    recovered_nodes = torch.nonzero(recovered_node_mask, as_tuple=False).view(-1)
+    candidate_nodes = torch.nonzero(candidate_node_mask, as_tuple=False).view(-1)
+    if recovered_nodes.numel() == 0 or candidate_nodes.numel() == 0:
+        return sparse_edge_index, torch.zeros_like(recovered_node_mask), 0
+
+    x = normalized_cpu(x_llm)
+    recovered_nodes = recovered_nodes.cpu()
+    candidate_nodes = candidate_nodes.cpu()
+    candidate_x = x[candidate_nodes].t().contiguous()
+    added_edges = []
+    successful_recovered = torch.zeros_like(recovered_node_mask)
+    edge_budget = int(max_edges_per_node)
+    if repair_policy == "adaptive":
+        if observed_node_count is None:
+            observed_nodes = torch.unique(sparse_edge_index.cpu()) if sparse_edge_index.numel() > 0 else torch.empty(0)
+            observed_node_count = int(observed_nodes.numel())
+        avg_observed_degree = (
+            float(sparse_edge_index.size(1)) / max(int(observed_node_count), 1)
+            if observed_node_count > 0
+            else 0.0
+        )
+        edge_budget = min(int(max_edges_per_node), max(1, int(np.ceil(avg_observed_degree))))
+
+    existing_edges = set()
+    if sparse_edge_index.numel() > 0:
+        existing_edges = set(zip(sparse_edge_index[0].cpu().tolist(), sparse_edge_index[1].cpu().tolist()))
+
+    batch_size = 256
+    topk = min(int(k_neighbors), candidate_nodes.numel()) if k_neighbors > 0 else candidate_nodes.numel()
+    if topk <= 0:
+        return sparse_edge_index, successful_recovered, 0
+
+    for start in range(0, recovered_nodes.numel(), batch_size):
+        batch_nodes = recovered_nodes[start : start + batch_size]
+        batch_sims = x[batch_nodes] @ candidate_x
+        if topk < candidate_nodes.numel():
+            topk_sims, topk_idx = torch.topk(batch_sims, k=topk, dim=1, largest=True)
+        else:
+            topk_sims = batch_sims
+            topk_idx = torch.arange(candidate_nodes.numel()).view(1, -1).expand(batch_sims.size(0), -1)
+
+        for row_idx, node in enumerate(batch_nodes.tolist()):
+            candidate_sims = topk_sims[row_idx]
+            candidate_idx = topk_idx[row_idx]
+            if repair_policy == "adaptive":
+                threshold = candidate_sims.mean()
+                if candidate_sims.numel() > 1:
+                    threshold = threshold + adaptive_threshold_alpha * candidate_sims.std(unbiased=False)
+                valid_mask = candidate_sims >= threshold
+            else:
+                valid_mask = candidate_sims >= similarity_threshold
+
+            if not valid_mask.any():
+                continue
+
+            valid = candidate_idx[valid_mask]
+            valid_sims = candidate_sims[valid_mask]
+            order = torch.argsort(valid_sims, descending=True)
+            repaired = 0
+            for candidate_pos in valid[order].tolist():
+                candidate = int(candidate_nodes[candidate_pos].item())
+                if candidate == node:
+                    continue
+                src, dst = int(node), candidate
+                if (src, dst) in existing_edges or (dst, src) in existing_edges:
+                    continue
+                added_edges.append((src, dst))
+                added_edges.append((dst, src))
+                existing_edges.add((src, dst))
+                existing_edges.add((dst, src))
+                repaired += 1
+                if repaired >= edge_budget:
+                    break
+
+            if repaired > 0:
+                successful_recovered[node] = True
+
+        del batch_sims, topk_sims, topk_idx
+
+    if not added_edges:
+        return sparse_edge_index, successful_recovered, 0
+
+    added_edge_index = torch.tensor(added_edges, dtype=torch.long).t().contiguous()
+    repaired_edge_index = torch.cat([sparse_edge_index.cpu(), added_edge_index], dim=1)
+    return repaired_edge_index, successful_recovered, len(added_edges) // 2
+
+
+def build_cold_start_training_state(
+    x_llm,
+    y,
+    sparse_edge_index,
+    cold_start_mask,
+    observed_train_mask,
+    candidate_node_mask,
+    num_classes,
+    admission_ratio,
+    admission_strategy,
+    pseudo_label_strategy,
+    pseudo_label_k,
+    pseudo_label_confidence,
+    k_neighbors,
+    similarity_threshold,
+    max_edges_per_node,
+    repair_policy,
+    adaptive_threshold_alpha,
+    seed,
+    observed_node_count=None,
+):
+    selected_mask, cluster_labels, center_distance = select_cold_start_nodes(
+        x_llm=x_llm,
+        cold_start_mask=cold_start_mask,
+        num_classes=num_classes,
+        admission_ratio=admission_ratio,
+        strategy=admission_strategy,
+        seed=seed,
+    )
+    pseudo_y, pseudo_confidence = assign_pseudo_labels(
+        x_llm=x_llm,
+        observed_train_mask=observed_train_mask,
+        selected_mask=selected_mask,
+        y=y,
+        num_classes=num_classes,
+        strategy=pseudo_label_strategy,
+        pseudo_label_k=pseudo_label_k,
+        seed=seed,
+    )
+    label_ready_mask = selected_mask & (pseudo_confidence >= pseudo_label_confidence)
+    repaired_edge_index, successful_recovered_mask, added_recovery_edges = build_semantic_recovery_edges(
+        x_llm=x_llm,
+        sparse_edge_index=sparse_edge_index,
+        recovered_node_mask=selected_mask,
+        candidate_node_mask=candidate_node_mask,
+        k_neighbors=k_neighbors,
+        similarity_threshold=similarity_threshold,
+        max_edges_per_node=max_edges_per_node,
+        repair_policy=repair_policy,
+        adaptive_threshold_alpha=adaptive_threshold_alpha,
+        observed_node_count=observed_node_count,
+    )
+    pseudo_train_mask = label_ready_mask & successful_recovered_mask
+    train_mask = observed_train_mask | pseudo_train_mask
+    return {
+        "edge_index": repaired_edge_index,
+        "pseudo_y": pseudo_y,
+        "train_mask": train_mask,
+        "selected_mask": selected_mask,
+        "cluster_labels": cluster_labels,
+        "center_distance": center_distance,
+        "pseudo_confidence": pseudo_confidence,
+        "label_ready_mask": label_ready_mask,
+        "successful_recovered_mask": successful_recovered_mask,
+        "pseudo_train_mask": pseudo_train_mask,
+        "added_recovery_edges": int(added_recovery_edges),
+    }
+
+
 def safe_nanmean(values):
     arr = np.asarray(values, dtype=float)
     if arr.size == 0 or np.isnan(arr).all():
