@@ -457,3 +457,13 @@ conda run -n llm-sgnn python scripts\utils\run_single_dataset_pilot.py --dataset
 conda run -n llm-sgnn python scripts\utils\run_single_dataset_pilot.py --dataset cora --model-filter ours_gcn --num-runs 1 --num-epochs 1 --drop-rate 0.1 --node-drop-rate 0.2 --recovery-ratio 0.5 --repair-policy adaptive --max-edges-per-recovered-node 5
 conda run -n llm-sgnn python scripts\utils\run_single_dataset_pilot.py --dataset cora --model-filter ours_gcn --num-runs 1 --num-epochs 1 --drop-rate 0.1 --node-drop-rate 0.2 --cold-start --admission-ratio 0.5 --repair-policy adaptive --max-edges-per-recovered-node 5 --force-regenerate-embeddings
 ```
+
+Protocol invariant check:
+
+```powershell
+conda run -n llm-sgnn python scripts\utils\verify_cold_start_protocol.py
+```
+
+This synthetic check changes the hidden ground-truth labels of cold-start nodes
+and asserts that admission, recovered edges, pseudo-train membership, and the
+pseudo labels used by the supervised loss do not change.
