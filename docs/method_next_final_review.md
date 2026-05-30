@@ -34,6 +34,9 @@ extension and related paper updates.
 - Updated `docs/cold_start_recovery.md` and `docs/paper_draft_zh.md` with the
   current interpretation: cold-start remains an appendix extension and protocol
   capability, not the paper's main contribution.
+- Added the final threshold-screen boundary note to `docs/paper_draft_zh.md` so
+  the Chinese draft now records that stricter pseudo-label gates improve
+  diagnostic accuracy without stabilizing downstream gains.
 - Replaced related-work placeholders with verified source links in the paper
   drafts.
 - Added table and repository hygiene verification scripts.
@@ -108,8 +111,8 @@ git log --oneline origin/method-next..HEAD
 The ahead commits cover formal cold-start controls, pseudo-label support and
 agreement filters, pseudo-label loss weighting, edge-only and high-reliability
 experiment records, main-entry metadata hardening, hidden-label scrubbing,
-paper-table verification, repository hygiene verification, and this review
-snapshot.
+paper-table verification, repository hygiene verification, threshold-screen
+boundary notes, and this review snapshot.
 
 ## Recommended Next Decision
 
