@@ -9,7 +9,7 @@ extension and related paper updates.
 ## Branch State
 
 - Branch: `method-next`
-- Remote tracking state at review time: `method-next...origin/method-next [ahead 18]`
+- Remote tracking state at review time: `method-next...origin/method-next [ahead 19]`
 - Main branch was not modified or merged.
 - No push has been performed from this review pass.
 
@@ -93,6 +93,7 @@ ignored and should not be committed:
 Current commits ahead of `origin/method-next`:
 
 ```text
+49934ce Add method-next final review snapshot
 0026e56 Add repository hygiene verification
 85a1be6 Scrub hidden cold-start labels from pseudo targets
 ba4fea1 Tighten cold-start main-entry metadata
