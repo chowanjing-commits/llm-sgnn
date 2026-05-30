@@ -445,6 +445,14 @@ Output files:
 - `logs/wikics_single_pilot_coldstart_drop0_node75_20260530_162614.csv`
 - `logs/arxiv_single_pilot_coldstart_drop0_node75_20260530_163630.csv`
 
+Matched no-cold-start control files, using the same main entry with
+`--recovery-ratio 0.0` and without `--cold-start`:
+
+- `logs/cora_single_pilot_drop0_node75_20260530_164206.csv`
+- `logs/pubmed_single_pilot_drop0_node75_20260530_164245.csv`
+- `logs/wikics_single_pilot_drop0_node75_20260530_164326.csv`
+- `logs/arxiv_single_pilot_drop0_node75_20260530_164516.csv`
+
 | Dataset | Backbone | Accuracy | Std | Selected cold-start | Pseudo-train tracked | Recovery edges | Pseudo-label acc. |
 |---|---|---:|---:|---:|---:|---:|---:|
 | Cora | GCN | 0.7213 | 0.0170 | 50.0 | 23.7 | 99.7 | 0.6626 |
@@ -461,11 +469,31 @@ Output files:
 | arXiv-full | GraphSAGE | 0.6070 | 0.0026 | 34102.0 | 22048.3 | 71104.0 | 0.6630 |
 
 Compared with the default pseudo-supervised integration table above, the
-edge-only objective improves every listed model and dataset. The strongest
-full-arXiv backbone remains GraphSAGE, but the Cora/PubMed/WikiCS results show
-that the safer objective is not tied to a single backbone. `Pseudo-train tracked`
+edge-only objective improves every listed model and dataset. Against the matched
+no-cold-start control, however, the effect is mostly neutral:
+
+| Dataset | Backbone | No cold-start | Edge-only | Delta |
+|---|---|---:|---:|---:|
+| Cora | GCN | 0.7210 | 0.7213 | +0.0003 |
+| Cora | GAT | 0.7247 | 0.7100 | -0.0147 |
+| Cora | GraphSAGE | 0.7250 | 0.7230 | -0.0020 |
+| PubMed | GCN | 0.6860 | 0.6873 | +0.0013 |
+| PubMed | GAT | 0.6770 | 0.7197 | +0.0427 |
+| PubMed | GraphSAGE | 0.6800 | 0.6817 | +0.0017 |
+| WikiCS | GCN | 0.7005 | 0.7010 | +0.0005 |
+| WikiCS | GAT | 0.6938 | 0.6976 | +0.0038 |
+| WikiCS | GraphSAGE | 0.7132 | 0.7114 | -0.0018 |
+| arXiv-full | GCN | 0.5792 | 0.5804 | +0.0012 |
+| arXiv-full | GAT | 0.5965 | 0.5964 | -0.0001 |
+| arXiv-full | GraphSAGE | 0.6108 | 0.6070 | -0.0038 |
+
+The strongest full-arXiv backbone remains GraphSAGE. `Pseudo-train tracked`
 counts nodes passing pseudo-label filters for diagnostics; with loss weight
-`0.0`, they do not contribute supervised loss.
+`0.0`, they do not contribute supervised loss. These results strengthen the
+positioning of cold-start as a safe appendix extension and protocol capability:
+edge-only recovery removes the harm from noisy pseudo-label supervision, but it
+does not yet deliver a consistent gain over simply keeping the sparse graph
+without admitted cold-start nodes.
 
 ## Formal Cold-Start Controls
 

@@ -690,7 +690,28 @@ b = \min(k,\ b_{max},\ \lceil d_{obs} \rceil).
 | ogbn-arxiv-full | GAT | 59.64 ± 0.24 | 34102.0 | 22048.3 | 71104.0 | 66.30 |
 | ogbn-arxiv-full | GraphSAGE | 60.70 ± 0.26 | 34102.0 | 22048.3 | 71104.0 | 66.30 |
 
-表注：伪标签诊断节点是通过一致性过滤并进入 `pseudo_train_mask` 的节点；由于本实验设置伪标签损失权重为 0.0，这些节点不贡献监督损失，只用于诊断伪标签质量和保持与过滤协议一致。表 D5 相比表 D3 在所有数据集和骨干上均显著提高，说明冷启动扩展的可靠收益主要来自文本节点准入与语义结构恢复，而不是直接伪标签监督。
+表注：伪标签诊断节点是通过一致性过滤并进入 `pseudo_train_mask` 的节点；由于本实验设置伪标签损失权重为 0.0，这些节点不贡献监督损失，只用于诊断伪标签质量和保持与过滤协议一致。表 D5 相比表 D3 在所有数据集和骨干上均显著提高，说明直接伪标签监督是早期冷启动结果下降的主要原因之一。
+
+为了判断 edge-only 是否已经带来稳定净收益，本文进一步使用同一主入口、同一节点缺失率和同一三随机种子运行 no-cold-start 对照。该对照设置 `--recovery-ratio 0.0` 且不开启 `--cold-start`，因此不会准入 cold-start 节点、不会新增语义边，也不会使用隐藏节点标签。
+
+**表 D6. 主训练入口下 edge-only 冷启动与 no-cold-start 对照。**
+
+| 数据集 | 骨干 | No cold-start | Edge-only | 差值 |
+|---|---|---:|---:|---:|
+| Cora | GCN | 72.10 | 72.13 | +0.03 |
+| Cora | GAT | 72.47 | 71.00 | -1.47 |
+| Cora | GraphSAGE | 72.50 | 72.30 | -0.20 |
+| PubMed | GCN | 68.60 | 68.73 | +0.13 |
+| PubMed | GAT | 67.70 | 71.97 | +4.27 |
+| PubMed | GraphSAGE | 68.00 | 68.17 | +0.17 |
+| WikiCS | GCN | 70.05 | 70.10 | +0.05 |
+| WikiCS | GAT | 69.38 | 69.76 | +0.38 |
+| WikiCS | GraphSAGE | 71.32 | 71.14 | -0.18 |
+| ogbn-arxiv-full | GCN | 57.92 | 58.04 | +0.12 |
+| ogbn-arxiv-full | GAT | 59.65 | 59.64 | -0.01 |
+| ogbn-arxiv-full | GraphSAGE | 61.08 | 60.70 | -0.38 |
+
+表注：数值为测试准确率均值，单位为百分比；差值为 edge-only 减 no-cold-start。表 D6 说明，edge-only 冷启动消除了直接伪标签监督带来的明显伤害，但相对于不加入 cold-start 节点的保守控制组，当前收益仍主要是持平而不是稳定超过。因此，本文仍不将冷启动扩展提升为正文主贡献，而将其作为文本-only 新节点准入、结构恢复和伪标签诊断的附录能力。
 
 ## 附录 E. 复现材料与结果文件
 
@@ -736,6 +757,10 @@ b = \min(k,\ b_{max},\ \lceil d_{obs} \rceil).
 | 冷启动主入口 edge-only | `logs/pubmed_single_pilot_coldstart_drop0_node75_20260530_162323.csv` | 生成表 D5 的 PubMed 主入口 edge-only 结果 |
 | 冷启动主入口 edge-only | `logs/wikics_single_pilot_coldstart_drop0_node75_20260530_162614.csv` | 生成表 D5 的 WikiCS 主入口 edge-only 结果 |
 | 冷启动主入口 edge-only | `logs/arxiv_single_pilot_coldstart_drop0_node75_20260530_163630.csv` | 生成表 D5 的完整 ogbn-arxiv 主入口 edge-only 结果 |
+| 冷启动主入口 no-cold-start | `logs/cora_single_pilot_drop0_node75_20260530_164206.csv` | 生成表 D6 的 Cora 主入口 no-cold-start 对照 |
+| 冷启动主入口 no-cold-start | `logs/pubmed_single_pilot_drop0_node75_20260530_164245.csv` | 生成表 D6 的 PubMed 主入口 no-cold-start 对照 |
+| 冷启动主入口 no-cold-start | `logs/wikics_single_pilot_drop0_node75_20260530_164326.csv` | 生成表 D6 的 WikiCS 主入口 no-cold-start 对照 |
+| 冷启动主入口 no-cold-start | `logs/arxiv_single_pilot_drop0_node75_20260530_164516.csv` | 生成表 D6 的完整 ogbn-arxiv 主入口 no-cold-start 对照 |
 | 冷启动准入 | `src/cold_start.py` | 文本特征生成、冷启动配置、准入、伪标签、语义连边和训练掩码构造组件 |
 | 冷启动主入口 | `scripts/utils/run_single_dataset_pilot.py` | 支持 `--cold-start` 的主训练入口，用于从主方法路径调用冷启动流程 |
 | 冷启动准入 | `scripts/utils/summarize_cold_start_budget.py` | 从冷启动预算 CSV 生成表 D1-D2 的 Markdown |
