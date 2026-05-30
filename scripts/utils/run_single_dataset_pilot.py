@@ -280,6 +280,7 @@ def train_and_eval(
     pseudo_train_mask = torch.zeros_like(dropped_node_mask)
     pseudo_label_accuracy = float("nan")
     pseudo_label_confidence_mean = float("nan")
+    pseudo_label_support_mean = float("nan")
     selected_center_distance_mean = float("nan")
 
     if is_repair_model(model_type) and cold_start_config is not None:
@@ -313,6 +314,7 @@ def train_and_eval(
                 state["pseudo_y"][pseudo_nodes] == data.y[pseudo_nodes]
             ).float().mean().item()
             pseudo_label_confidence_mean = state["pseudo_confidence"][pseudo_nodes].mean().item()
+            pseudo_label_support_mean = state["pseudo_label_support"][pseudo_nodes].float().mean().item()
             center_distance = state["center_distance"][pseudo_nodes]
             finite_center_distance = center_distance[torch.isfinite(center_distance)]
             if finite_center_distance.numel() > 0:
@@ -418,6 +420,7 @@ def train_and_eval(
         "recovery_edges": int(added_recovery_edges),
         "pseudo_label_accuracy": pseudo_label_accuracy,
         "pseudo_label_confidence_mean": pseudo_label_confidence_mean,
+        "pseudo_label_support_mean": pseudo_label_support_mean,
         "selected_center_distance_mean": selected_center_distance_mean,
     }
 
@@ -457,6 +460,7 @@ def main():
     )
     parser.add_argument("--pseudo-label-k", type=int, default=5)
     parser.add_argument("--pseudo-label-confidence", type=float, default=0.0)
+    parser.add_argument("--min-pseudo-label-support", type=int, default=0)
     parser.add_argument(
         "--force-regenerate-embeddings",
         action="store_true",
@@ -565,6 +569,7 @@ def main():
             pseudo_label_strategy=args.pseudo_label_strategy,
             pseudo_label_k=args.pseudo_label_k,
             pseudo_label_confidence=args.pseudo_label_confidence,
+            min_pseudo_label_support=args.min_pseudo_label_support,
             k_neighbors=args.k_neighbors,
             similarity_threshold=args.similarity_threshold,
             max_edges_per_node=args.max_edges_per_recovered_node,
@@ -589,6 +594,7 @@ def main():
         recovery_edges = []
         pseudo_label_accuracies = []
         pseudo_label_confidences = []
+        pseudo_label_supports = []
         selected_center_distances = []
         for split_idx in split_indices:
             split_data = get_wikics_split(data, split_idx) if args.dataset == "wikics" else data
@@ -628,6 +634,7 @@ def main():
                 recovery_edges.append(result["recovery_edges"])
                 pseudo_label_accuracies.append(result["pseudo_label_accuracy"])
                 pseudo_label_confidences.append(result["pseudo_label_confidence_mean"])
+                pseudo_label_supports.append(result["pseudo_label_support_mean"])
                 selected_center_distances.append(result["selected_center_distance_mean"])
                 selected_metric = (
                     f"selected_cold_start={result['selected_cold_start_nodes']} "
@@ -673,6 +680,7 @@ def main():
                 "recovery_edges_mean": float(np.mean(recovery_edges)),
                 "pseudo_label_accuracy_mean": safe_nanmean(pseudo_label_accuracies),
                 "pseudo_label_confidence_mean": safe_nanmean(pseudo_label_confidences),
+                "pseudo_label_support_mean": safe_nanmean(pseudo_label_supports),
                 "selected_center_distance_mean": safe_nanmean(selected_center_distances),
                 "splits": ",".join(str(x) for x in split_indices),
                 "num_runs": args.num_runs,
@@ -685,6 +693,7 @@ def main():
                 "pseudo_label_strategy": args.pseudo_label_strategy if args.cold_start else "",
                 "pseudo_label_k": args.pseudo_label_k if args.cold_start else np.nan,
                 "pseudo_label_confidence": args.pseudo_label_confidence if args.cold_start else np.nan,
+                "min_pseudo_label_support": args.min_pseudo_label_support if args.cold_start else np.nan,
                 "repair_policy": args.repair_policy,
                 "similarity_threshold": args.similarity_threshold,
                 "adaptive_threshold_alpha": args.adaptive_threshold_alpha,

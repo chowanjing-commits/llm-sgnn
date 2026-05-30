@@ -135,6 +135,7 @@ def run_once(
     pseudo_label_strategy,
     pseudo_label_k,
     pseudo_label_confidence,
+    min_pseudo_label_support,
     k_neighbors,
     similarity_threshold,
     max_edges_per_recovered_node,
@@ -165,6 +166,7 @@ def run_once(
         pseudo_label_strategy=pseudo_label_strategy,
         pseudo_label_k=pseudo_label_k,
         pseudo_label_confidence=pseudo_label_confidence,
+        min_pseudo_label_support=min_pseudo_label_support,
         k_neighbors=k_neighbors,
         similarity_threshold=similarity_threshold,
         max_edges_per_node=max_edges_per_recovered_node,
@@ -199,10 +201,12 @@ def run_once(
     if pseudo_nodes.numel() > 0:
         pseudo_acc = (state["pseudo_y"][pseudo_nodes] == data.y[pseudo_nodes]).float().mean().item()
         pseudo_conf_mean = state["pseudo_confidence"][pseudo_nodes].mean().item()
+        pseudo_support_mean = state["pseudo_label_support"][pseudo_nodes].float().mean().item()
         center_dist_mean = state["center_distance"][pseudo_nodes].nanmean().item()
     else:
         pseudo_acc = float("nan")
         pseudo_conf_mean = float("nan")
+        pseudo_support_mean = float("nan")
         center_dist_mean = float("nan")
 
     return {
@@ -221,6 +225,7 @@ def run_once(
         "recovery_edges": int(state["added_recovery_edges"]),
         "pseudo_label_accuracy": pseudo_acc,
         "pseudo_label_confidence_mean": pseudo_conf_mean,
+        "pseudo_label_support_mean": pseudo_support_mean,
         "selected_center_distance_mean": center_dist_mean,
     }
 
@@ -241,6 +246,12 @@ def main():
                         choices=["cluster_majority", "nearest_labeled", "class_centroid"])
     parser.add_argument("--pseudo-label-k", type=int, default=5)
     parser.add_argument("--pseudo-label-confidence", type=float, default=0.0)
+    parser.add_argument(
+        "--min-pseudo-label-support",
+        type=int,
+        default=0,
+        help="Require this many observed training labels to support a pseudo label before it enters the loss.",
+    )
     parser.add_argument("--k-neighbors", type=int, default=10)
     parser.add_argument("--similarity-threshold", type=float, default=0.6)
     parser.add_argument("--max-edges-per-recovered-node", type=int, default=10)
@@ -310,6 +321,7 @@ def main():
                         pseudo_label_strategy=args.pseudo_label_strategy,
                         pseudo_label_k=args.pseudo_label_k,
                         pseudo_label_confidence=args.pseudo_label_confidence,
+                        min_pseudo_label_support=args.min_pseudo_label_support,
                         k_neighbors=args.k_neighbors,
                         similarity_threshold=args.similarity_threshold,
                         max_edges_per_recovered_node=args.max_edges_per_recovered_node,
@@ -344,6 +356,7 @@ def main():
                         "pseudo_label_strategy": args.pseudo_label_strategy,
                         "pseudo_label_k": args.pseudo_label_k,
                         "pseudo_label_confidence": args.pseudo_label_confidence,
+                        "min_pseudo_label_support": args.min_pseudo_label_support,
                         "k_neighbors": args.k_neighbors,
                         "similarity_threshold": args.similarity_threshold,
                         "max_edges_per_recovered_node": args.max_edges_per_recovered_node,
@@ -363,6 +376,7 @@ def main():
                         "recovery_edges_mean": float(np.mean([item["recovery_edges"] for item in stats])),
                         "pseudo_label_accuracy_mean": safe_nanmean([item["pseudo_label_accuracy"] for item in stats]),
                         "pseudo_label_confidence_mean": safe_nanmean([item["pseudo_label_confidence_mean"] for item in stats]),
+                        "pseudo_label_support_mean": safe_nanmean([item["pseudo_label_support_mean"] for item in stats]),
                         "selected_center_distance_mean": safe_nanmean([item["selected_center_distance_mean"] for item in stats]),
                     }
                 )
@@ -391,6 +405,7 @@ def main():
                 "pseudo_train_nodes_mean",
                 "recovery_edges_mean",
                 "pseudo_label_accuracy_mean",
+                "pseudo_label_support_mean",
             ]
         ].to_string(index=False)
     )

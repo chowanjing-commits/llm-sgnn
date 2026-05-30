@@ -19,6 +19,7 @@ class ColdStartPipelineConfig:
     pseudo_label_strategy: str = "cluster_majority"
     pseudo_label_k: int = 5
     pseudo_label_confidence: float = 0.0
+    min_pseudo_label_support: int = 0
     k_neighbors: int = 10
     similarity_threshold: float = 0.6
     max_edges_per_node: int = 10
@@ -187,10 +188,11 @@ def select_cold_start_nodes(x_llm, cold_start_mask, num_classes, admission_ratio
 def pseudo_label_by_nearest_labeled(x_llm, observed_train_mask, selected_mask, y, num_classes, k):
     pseudo_y = y.clone()
     confidence = torch.full_like(y, float("nan"), dtype=torch.float)
+    support = torch.zeros_like(y, dtype=torch.long)
     train_nodes = torch.nonzero(observed_train_mask, as_tuple=False).view(-1).cpu()
     selected_nodes = torch.nonzero(selected_mask, as_tuple=False).view(-1).cpu()
     if train_nodes.numel() == 0 or selected_nodes.numel() == 0:
-        return pseudo_y, confidence
+        return pseudo_y, confidence, support
 
     x = normalized_cpu(x_llm)
     topk = min(max(1, int(k)), train_nodes.numel())
@@ -202,15 +204,17 @@ def pseudo_label_by_nearest_labeled(x_llm, observed_train_mask, selected_mask, y
         counts = torch.bincount(labels, minlength=num_classes).float()
         pseudo_y[node] = int(torch.argmax(counts).item())
         confidence[node] = float(counts.max().item() / max(labels.numel(), 1))
-    return pseudo_y, confidence
+        support[node] = int(counts.max().item())
+    return pseudo_y, confidence, support
 
 
 def pseudo_label_by_class_centroid(x_llm, observed_train_mask, selected_mask, y, num_classes):
     pseudo_y = y.clone()
     confidence = torch.full_like(y, float("nan"), dtype=torch.float)
+    support = torch.zeros_like(y, dtype=torch.long)
     selected_nodes = torch.nonzero(selected_mask, as_tuple=False).view(-1).cpu()
     if selected_nodes.numel() == 0:
-        return pseudo_y, confidence
+        return pseudo_y, confidence, support
 
     x = normalized_cpu(x_llm)
     centroids = []
@@ -224,7 +228,7 @@ def pseudo_label_by_class_centroid(x_llm, observed_train_mask, selected_mask, y,
         centroids.append(F.normalize(x[nodes].mean(dim=0, keepdim=True), p=2, dim=1).squeeze(0))
         valid_labels.append(label)
     if not centroids:
-        return pseudo_y, confidence
+        return pseudo_y, confidence, support
 
     centroid_x = torch.stack(centroids, dim=0)
     sims = x[selected_nodes] @ centroid_x.t().contiguous()
@@ -232,7 +236,8 @@ def pseudo_label_by_class_centroid(x_llm, observed_train_mask, selected_mask, y,
     for row_idx, node in enumerate(selected_nodes.tolist()):
         pseudo_y[node] = valid_labels[int(best_idx[row_idx].item())]
         confidence[node] = float((best_sims[row_idx].item() + 1.0) / 2.0)
-    return pseudo_y, confidence
+        support[node] = int((y_cpu[observed_cpu] == pseudo_y[node]).sum().item())
+    return pseudo_y, confidence, support
 
 
 def pseudo_label_by_cluster_majority(
@@ -246,11 +251,12 @@ def pseudo_label_by_cluster_majority(
 ):
     pseudo_y = y.clone()
     confidence = torch.full_like(y, float("nan"), dtype=torch.float)
+    support = torch.zeros_like(y, dtype=torch.long)
     active_mask = observed_train_mask | selected_mask
     active_nodes = torch.nonzero(active_mask, as_tuple=False).view(-1).cpu()
     selected_nodes = torch.nonzero(selected_mask, as_tuple=False).view(-1).cpu()
     if active_nodes.numel() == 0 or selected_nodes.numel() == 0:
-        return pseudo_y, confidence
+        return pseudo_y, confidence, support
 
     x = normalized_cpu(x_llm)
     cluster_labels, _ = fit_kmeans(x[active_nodes], num_clusters=num_clusters, seed=seed)
@@ -259,7 +265,7 @@ def pseudo_label_by_cluster_majority(
 
     y_cpu = y.detach().cpu()
     observed_cpu = observed_train_mask.detach().cpu()
-    fallback_y, fallback_conf = pseudo_label_by_class_centroid(
+    fallback_y, fallback_conf, fallback_support = pseudo_label_by_class_centroid(
         x_llm=x_llm,
         observed_train_mask=observed_train_mask,
         selected_mask=selected_mask,
@@ -273,11 +279,13 @@ def pseudo_label_by_cluster_majority(
         if labeled_nodes.numel() == 0:
             pseudo_y[node] = fallback_y[node]
             confidence[node] = fallback_conf[node]
+            support[node] = fallback_support[node]
             continue
         counts = torch.bincount(y_cpu[labeled_nodes], minlength=num_classes).float()
         pseudo_y[node] = int(torch.argmax(counts).item())
         confidence[node] = float(counts.max().item() / max(labeled_nodes.numel(), 1))
-    return pseudo_y, confidence
+        support[node] = int(counts.max().item())
+    return pseudo_y, confidence, support
 
 
 def assign_pseudo_labels(
@@ -435,6 +443,7 @@ def build_cold_start_training_state(
     pseudo_label_strategy,
     pseudo_label_k,
     pseudo_label_confidence,
+    min_pseudo_label_support,
     k_neighbors,
     similarity_threshold,
     max_edges_per_node,
@@ -451,7 +460,7 @@ def build_cold_start_training_state(
         strategy=admission_strategy,
         seed=seed,
     )
-    pseudo_y, pseudo_confidence = assign_pseudo_labels(
+    pseudo_y, pseudo_confidence, pseudo_label_support = assign_pseudo_labels(
         x_llm=x_llm,
         observed_train_mask=observed_train_mask,
         selected_mask=selected_mask,
@@ -461,8 +470,12 @@ def build_cold_start_training_state(
         pseudo_label_k=pseudo_label_k,
         seed=seed,
     )
-    label_ready_mask = selected_mask & torch.isfinite(pseudo_confidence) & (
-        pseudo_confidence >= pseudo_label_confidence
+    support_ready_mask = pseudo_label_support >= max(0, int(min_pseudo_label_support))
+    label_ready_mask = (
+        selected_mask
+        & torch.isfinite(pseudo_confidence)
+        & (pseudo_confidence >= pseudo_label_confidence)
+        & support_ready_mask
     )
     repaired_edge_index, successful_recovered_mask, added_recovery_edges = build_semantic_recovery_edges(
         x_llm=x_llm,
@@ -486,6 +499,7 @@ def build_cold_start_training_state(
         "cluster_labels": cluster_labels,
         "center_distance": center_distance,
         "pseudo_confidence": pseudo_confidence,
+        "pseudo_label_support": pseudo_label_support,
         "label_ready_mask": label_ready_mask,
         "successful_recovered_mask": successful_recovered_mask,
         "pseudo_train_mask": pseudo_train_mask,
@@ -518,6 +532,7 @@ def build_cold_start_training_state_from_config(
         pseudo_label_strategy=pipeline_config.pseudo_label_strategy,
         pseudo_label_k=pipeline_config.pseudo_label_k,
         pseudo_label_confidence=pipeline_config.pseudo_label_confidence,
+        min_pseudo_label_support=pipeline_config.min_pseudo_label_support,
         k_neighbors=pipeline_config.k_neighbors,
         similarity_threshold=pipeline_config.similarity_threshold,
         max_edges_per_node=pipeline_config.max_edges_per_node,

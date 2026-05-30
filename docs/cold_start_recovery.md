@@ -471,6 +471,39 @@ Conclusion:
   mechanism or a training objective that does not treat noisy pseudo labels as
   ordinary ground-truth supervision.
 
+### Pseudo-Label Support Filtering
+
+After reviewing the formal controls, we added a conservative pseudo-label
+support diagnostic and optional filter:
+
+```powershell
+--min-pseudo-label-support 2
+```
+
+`pseudo_label_support` counts how many observed training labels support the
+assigned pseudo label. For `cluster_majority`, this is the majority-label count
+inside the mixed cluster. For `nearest_labeled`, it is the vote count among the
+nearest observed labels. For `class_centroid`, it is the number of observed
+training nodes in the selected class. A node enters `pseudo_train_mask` only if
+its pseudo-label confidence is finite, exceeds `--pseudo-label-confidence`, and
+meets `--min-pseudo-label-support`. The default is `0`, preserving previous
+results.
+
+Initial check at admission ratio `0.50`, GraphSAGE, 3 seeds, 100 epochs:
+
+| Dataset | Min support | Accuracy | Std | Selected cold-start | Pseudo-train | Pseudo-label acc. | Support mean |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Cora | 0 | 0.5023 | 0.0921 | 50.0 | 50.0 | 0.3800 | n/a |
+| Cora | 2 | 0.4747 | 0.0610 | 50.0 | 43.0 | 0.3434 | 4.5102 |
+| PubMed | 0 | 0.5310 | 0.1501 | 22.0 | 22.0 | 0.4091 | n/a |
+| PubMed | 2 | 0.5413 | 0.1620 | 22.0 | 20.0 | 0.4413 | 3.6970 |
+
+Support filtering helps PubMed slightly but hurts Cora in this first check, so
+minimum support alone is not enough to promote cold-start to a main contribution.
+It is still useful as a diagnostic and as a building block for stronger filters,
+such as agreement between cluster-majority, nearest-labeled, and class-centroid
+pseudo labels.
+
 ## Review Notes
 
 Protocol audit:
