@@ -304,7 +304,8 @@ Current limitations:
 - Main results are now reported over 3 seeds; sensitivity and alpha-sweep analyses are still one-seed ablations.
 - Cora and PubMed have very small Planetoid training splits.
 - The current ogbn-arxiv LLM cache uses real paper titles only. The arXiv synthetic-text ablation is therefore a title-level comparison; title-plus-abstract true-text and synthetic-text embeddings remain a useful follow-up.
-- Related work and citations are not yet verified in this draft.
+- Related work now uses verified source links, but final BibTeX entries have not
+  yet been generated.
 - Thresholds are raw cosine thresholds and may not be calibrated across datasets.
 - Recovery edge hit rates are moderate to low, so claims should emphasize semantic pseudo-neighborhood repair rather than exact topology reconstruction.
 
@@ -315,17 +316,57 @@ Next experiments:
 - Add a percentile-threshold variant, for example keeping candidates above the 90th or 95th percentile of recovered-node similarities.
 - Add degree-aware caps, for example \(b=\min(3, \lceil \bar{d}_{obs} \rceil)\) or class/dataset-specific caps based on observed degree statistics.
 
-## 11. Related Work Placeholder
+## 11. Related Work
 
-This section requires verified citations before submission. Relevant areas likely include:
+Graph neural networks for semi-supervised node classification propagate features
+and labels over the observed graph. The main backbones in this draft follow GCN
+([Kipf and Welling, 2017](https://arxiv.org/abs/1609.02907)), GraphSAGE
+([Hamilton et al., 2017](https://arxiv.org/abs/1706.02216)), and GAT
+([Velickovic et al., 2018](https://arxiv.org/abs/1710.10903)). The Cora and
+PubMed splits are commonly associated with Planetoid
+([Yang et al., 2016](https://arxiv.org/abs/1603.08861)); ogbn-arxiv comes from
+the [Open Graph Benchmark](https://arxiv.org/abs/2005.00687); WikiCS is from
+[Mernyei and Cangea, 2020](https://arxiv.org/abs/2007.02901). This paper does
+not propose a new message-passing layer. It studies how language-model
+representations can provide controlled semantic neighborhoods when training
+nodes and their incident edges are missing.
 
-- Graph neural networks for semi-supervised node classification. [CITATION NEEDED]
-- Text-attributed graph learning and citation network benchmarks. [CITATION NEEDED]
-- Graph structure learning and topology augmentation. [CITATION NEEDED]
-- Language-model embeddings for graph learning. [CITATION NEEDED]
-- Learning on incomplete, evolving, or cold-start graphs. [CITATION NEEDED]
+Graph structure learning and topology augmentation methods directly learn or
+revise graph connectivity, including LDS-GNN
+([Franceschi et al., 2019](https://arxiv.org/abs/1903.11960)), IDGL
+([Chen et al., 2020](https://arxiv.org/abs/2006.13009)), and Pro-GNN
+([Jin et al., 2020](https://arxiv.org/abs/2005.10203)). Our intervention is
+narrower: we do not rewrite the whole graph or claim exact topology
+reconstruction, but add budgeted semantic edges only around sampled missing
+training nodes and report recovery-quality diagnostics.
 
-Do not add fabricated BibTeX entries. Verify all citations programmatically before converting this draft to LaTeX.
+Text-attributed graph learning increasingly combines pretrained language models
+with graph neural networks. GLEM
+([Zhao et al., 2022](https://arxiv.org/abs/2210.14709)) jointly leverages
+language models and GNNs on large text-attributed graphs, while Patton
+([Jin et al., 2023](https://aclanthology.org/2023.acl-long.387/)) pretrains
+language models on text-rich networks. This draft uses frozen language-model
+embeddings as a repair signal rather than training a new text-graph foundation
+model.
+
+Pseudo-labeling and self-training are relevant to the cold-start appendix.
+M3S ([Sun et al., 2019](https://arxiv.org/abs/1902.11038)) uses multi-stage
+self-supervised training to expand supervision on graphs. The cold-start
+extension in this draft follows a conservative version of that idea: admitted
+text-only nodes may be connected for message passing, but only nodes that pass
+confidence, support, or agreement gates enter pseudo-label supervision; the
+others remain unlabeled.
+
+Learning with incomplete neighborhoods or cold-start nodes is another adjacent
+line. Cold Brew ([Zheng et al., 2021](https://arxiv.org/abs/2111.04840))
+distills node representations for incomplete or missing neighborhoods. Our
+appendix D simulates text-only candidate admission, pseudo-label diagnostics,
+and controlled edge recovery; it remains a boundary analysis rather than the
+paper's main contribution.
+
+The links above are verified source links for the draft stage. Before converting
+to LaTeX, generate BibTeX entries from arXiv, ACL Anthology, DBLP, or official
+benchmark pages rather than hand-writing them.
 
 ## 12. Current Artifact Links
 
