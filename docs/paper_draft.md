@@ -2,13 +2,15 @@
 
 Draft date: 2026-05-22
 
-Status: working draft. This document summarizes the current research framing, method, and experiments. It intentionally avoids unverified citations; add verified related work before submission.
+Status: working draft. This document summarizes the current research framing,
+method, and experiments. Related work now uses verified source links, but final
+BibTeX entries have not yet been generated.
 
 ## Abstract
 
 Graph neural networks rely on observed topology to propagate label information, but real text-attributed graphs often contain newly appearing, partially observed, or structurally isolated nodes. In this setting, treating missing nodes as merely edge-dropped nodes is insufficient: the node itself is absent from the observed training process, and its incident edges are unavailable. We study a training-node missingness setting in which a subset of training nodes and their incident edges are removed from the observed graph, while the raw text of selected missing nodes remains available. The proposed LLM-GNN Repair framework uses text-derived language-model embeddings to recover a controlled subset of missing training nodes and construct semantic pseudo-neighborhoods around them. Recovered nodes are included in supervised training only if they are successfully connected.
 
-Across ogbn-arxiv, Cora, and PubMed 3-seed experiments, adaptive semantic pseudo-neighborhood repair improves over sparse GCN, GAT, and GraphSAGE message-passing baselines under severe node-drop settings. The repair step is a preprocessing module and can be followed by different downstream GNN backbones. Recovery-quality diagnostics show that only a subset of added semantic edges exactly match original graph edges, so the method should not be interpreted as high-precision topology reconstruction. Instead, it provides controlled semantic neighborhoods that improve classification under node-level sparsity. We further include a label-conditioned synthetic-text ablation showing that generated class-level text can partially mitigate missing text in some settings, but remains limited by generation quality and does not replace node-specific raw text.
+Across ogbn-arxiv, Cora, and PubMed 3-seed experiments, adaptive semantic pseudo-neighborhood repair improves over sparse GCN, GAT, and GraphSAGE message-passing baselines under severe node-drop settings. The repair step is a preprocessing module and can be followed by different downstream GNN backbones. Recovery-quality diagnostics show that only a subset of added semantic edges exactly match original graph edges, so the method should not be interpreted as high-precision topology reconstruction. Instead, it provides controlled semantic neighborhoods that improve classification under node-level sparsity. We further include a label-conditioned synthetic-text ablation showing that generated class-level text can partially mitigate missing text in some settings, but remains limited by generation quality and does not replace node-specific raw text. A text-only cold-start extension is treated as a boundary analysis: cold-start nodes may be admitted for message passing, but pseudo-label supervision should be restricted to a high-reliability subset.
 
 ## 1. Introduction
 
@@ -308,6 +310,8 @@ Current limitations:
   yet been generated.
 - Thresholds are raw cosine thresholds and may not be calibrated across datasets.
 - Recovery edge hit rates are moderate to low, so claims should emphasize semantic pseudo-neighborhood repair rather than exact topology reconstruction.
+- The text-only cold-start extension is dataset-dependent and does not yet
+  consistently outperform the no-cold-start control.
 
 Next experiments:
 
