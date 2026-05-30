@@ -800,6 +800,8 @@ Table audit:
   budget CSV files and matched the manually inserted values.
 - `scripts/utils/summarize_cold_start_budget.py` can regenerate the markdown
   tables from the saved summary CSV files.
+- `scripts/utils/verify_cold_start_paper_tables.py` verifies Tables D1-D8 in
+  `docs/paper_draft_zh.md` against the curated CSV files listed in Appendix E.
 
 Integration smoke checks on 2026-05-29:
 
@@ -817,6 +819,7 @@ conda run -n llm-sgnn python scripts\utils\verify_cold_start_protocol.py
 conda run -n llm-sgnn python scripts\utils\verify_no_cold_start_control.py
 conda run -n llm-sgnn python scripts\utils\verify_selective_pseudo_label_filter.py
 conda run -n llm-sgnn python scripts\utils\verify_pseudo_label_loss_weight.py
+conda run -n llm-sgnn python scripts\utils\verify_cold_start_paper_tables.py
 ```
 
 This synthetic check changes the hidden ground-truth labels of cold-start nodes

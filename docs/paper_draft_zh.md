@@ -838,6 +838,7 @@ DBLP/ACL/OGB 官方页面统一生成 BibTeX，避免手写条目引入错误。
 | 冷启动准入 | `src/cold_start.py` | 文本特征生成、冷启动配置、准入、伪标签、语义连边和训练掩码构造组件 |
 | 冷启动主入口 | `scripts/utils/run_single_dataset_pilot.py` | 支持 `--cold-start` 的主训练入口，用于从主方法路径调用冷启动流程 |
 | 冷启动准入 | `scripts/utils/summarize_cold_start_budget.py` | 从冷启动预算 CSV 生成表 D1-D2 的 Markdown |
+| 冷启动验证 | `scripts/utils/verify_cold_start_paper_tables.py` | 从 CSV 逐格验证表 D1-D8 与论文草稿一致 |
 | 冷启动验证 | `scripts/utils/verify_no_cold_start_control.py` | 验证不加入 cold-start 节点控制组不会恢复边或使用隐藏标签 |
 | 冷启动验证 | `scripts/utils/verify_selective_pseudo_label_filter.py` | 验证提高伪标签可靠性阈值时，低置信准入节点只参与连边和消息传递，不进入伪标签监督训练 |
 | 冷启动验证 | `scripts/utils/verify_pseudo_label_loss_weight.py` | 验证 edge-only 设置下伪标签不会通过监督损失影响训练 |
