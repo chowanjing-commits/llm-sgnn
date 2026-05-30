@@ -842,7 +842,8 @@ DBLP/ACL/OGB 官方页面统一生成 BibTeX，避免手写条目引入错误。
 | 冷启动验证 | `scripts/utils/verify_no_cold_start_control.py` | 验证不加入 cold-start 节点控制组不会恢复边或使用隐藏标签 |
 | 冷启动验证 | `scripts/utils/verify_selective_pseudo_label_filter.py` | 验证提高伪标签可靠性阈值时，低置信准入节点只参与连边和消息传递，不进入伪标签监督训练 |
 | 冷启动验证 | `scripts/utils/verify_pseudo_label_loss_weight.py` | 验证 edge-only 设置下伪标签不会通过监督损失影响训练 |
+| 仓库卫生 | `scripts/utils/verify_repository_hygiene.py` | 验证未跟踪大文件、模型/embedding/checkpoint 目录或非 allowlist 日志 |
 
-表注：表中列出的 CSV 均为轻量结果记录，适合随代码和论文草稿保存。完整 embedding、原始数据和本地下载的生成模型体积较大，应通过数据准备脚本或外部存储管理。
+表注：表中列出的 CSV 均为轻量结果记录，可用于本地复现和审查论文表格。当前仓库只跟踪 `.gitignore` allowlist 中的少量主结果 CSV；其余 `logs/` 实验输出保持为本地 ignored 文件，避免把完整实验输出目录纳入提交。完整 embedding、原始数据和本地下载的生成模型体积较大，应通过数据准备脚本或外部存储管理。
 
 冷启动准入脚本和主训练入口默认复用缓存的文本表征；若需要验证从原始文本到特征生成、准入、伪标签、连边和训练的完整链路，可添加 `--force-regenerate-embeddings` 重新构建 `x_llm`。完整 ogbn-arxiv 上该步骤开销较大，因此预算消融默认使用缓存表征。
