@@ -779,6 +779,8 @@ DBLP/ACL/OGB 官方页面统一生成 BibTeX，避免手写条目引入错误。
 
 表注：设置与表 D7 相同，但通过主训练入口运行三种 Ours 骨干。表 D8 表明，高可靠伪标签监督在 Cora/GAT 和完整 ogbn-arxiv/GraphSAGE 上有正面信号，但并未在所有骨干和数据集上稳定优于 edge-only 或 no-cold-start。因此，本文将它作为可选可靠性策略，而不是冷启动扩展的默认目标。
 
+补充的置信度阈值筛选进一步强化了这一结论。将严格一致性伪标签再按置信度过滤，可以显著提高离线伪标签准确率，例如 Cora 在阈值 0.65 时达到 91.07%，WikiCS 在阈值 0.80 时达到 100.00%，完整 ogbn-arxiv 在阈值 0.80 时达到 94.99%。但这些设置会明显减少进入监督损失的节点数，对应 GraphSAGE 测试准确率分别为 70.90%、71.22% 和 60.83%，并未比表 D7 的未加置信阈值高可靠策略或 no-cold-start 控制组更稳定。因此，提高伪标签可靠性是必要的安全控制，但仅靠更严格阈值还不足以把伪监督冷启动提升为默认主方法。
+
 ## 附录 E. 复现材料与结果文件
 
 为便于阶段性复现，表 E1 汇总本文当前使用的轻量结果文件和说明。大规模原始数据、模型权重、缓存 embedding 和 checkpoint 不纳入正文附录表，也不建议纳入版本控制。
@@ -835,6 +837,8 @@ DBLP/ACL/OGB 官方页面统一生成 BibTeX，避免手写条目引入错误。
 | 冷启动高可靠主入口 | `logs/pubmed_single_pilot_coldstart_drop0_node75_20260530_171213.csv` | 生成表 D8 的 PubMed 主入口高可靠伪标签结果 |
 | 冷启动高可靠主入口 | `logs/wikics_single_pilot_coldstart_drop0_node75_20260530_171309.csv` | 生成表 D8 的 WikiCS 主入口高可靠伪标签结果 |
 | 冷启动高可靠主入口 | `logs/arxiv_single_pilot_coldstart_drop0_node75_20260530_172042.csv` | 生成表 D8 的完整 ogbn-arxiv 主入口高可靠伪标签结果 |
+| 冷启动可靠性筛选 | `logs/cold_start_reliability_full_screen_summary_20260530_192118.csv` | 置信度和支持度阈值的伪标签可靠性筛选诊断 |
+| 冷启动可靠性筛选 | `logs/cold_start_reliable_c*_sage_summary_20260530_*.csv` | 高置信候选设置的 GraphSAGE 下游训练验证 |
 | 冷启动准入 | `src/cold_start.py` | 文本特征生成、冷启动配置、准入、伪标签、语义连边和训练掩码构造组件 |
 | 冷启动主入口 | `scripts/utils/run_single_dataset_pilot.py` | 支持 `--cold-start` 的主训练入口，用于从主方法路径调用冷启动流程 |
 | 冷启动准入 | `scripts/utils/summarize_cold_start_budget.py` | 从冷启动预算 CSV 生成表 D1-D2 的 Markdown |
@@ -842,6 +846,7 @@ DBLP/ACL/OGB 官方页面统一生成 BibTeX，避免手写条目引入错误。
 | 冷启动验证 | `scripts/utils/verify_no_cold_start_control.py` | 验证不加入 cold-start 节点控制组不会恢复边或使用隐藏标签 |
 | 冷启动验证 | `scripts/utils/verify_selective_pseudo_label_filter.py` | 验证提高伪标签可靠性阈值时，低置信准入节点只参与连边和消息传递，不进入伪标签监督训练 |
 | 冷启动验证 | `scripts/utils/verify_pseudo_label_loss_weight.py` | 验证 edge-only 设置下伪标签不会通过监督损失影响训练 |
+| 冷启动诊断 | `scripts/utils/screen_cold_start_reliability.py` | 不训练 GNN 的置信度和支持度阈值筛选脚本 |
 | 仓库卫生 | `scripts/utils/verify_repository_hygiene.py` | 验证未跟踪大文件、模型/embedding/checkpoint 目录或非 allowlist 日志 |
 
 表注：表中列出的 CSV 均为轻量结果记录，可用于本地复现和审查论文表格。当前仓库只跟踪 `.gitignore` allowlist 中的少量主结果 CSV；其余 `logs/` 实验输出保持为本地 ignored 文件，避免把完整实验输出目录纳入提交。完整 embedding、原始数据和本地下载的生成模型体积较大，应通过数据准备脚本或外部存储管理。
