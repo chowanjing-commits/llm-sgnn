@@ -136,6 +136,7 @@ def run_once(
     pseudo_label_k,
     pseudo_label_confidence,
     min_pseudo_label_support,
+    pseudo_label_agreement,
     k_neighbors,
     similarity_threshold,
     max_edges_per_recovered_node,
@@ -167,6 +168,7 @@ def run_once(
         pseudo_label_k=pseudo_label_k,
         pseudo_label_confidence=pseudo_label_confidence,
         min_pseudo_label_support=min_pseudo_label_support,
+        pseudo_label_agreement=pseudo_label_agreement,
         k_neighbors=k_neighbors,
         similarity_threshold=similarity_threshold,
         max_edges_per_node=max_edges_per_recovered_node,
@@ -197,6 +199,7 @@ def run_once(
     )
 
     pseudo_train_mask = state["pseudo_train_mask"]
+    agreement_mask = state["pseudo_label_agreement_mask"]
     pseudo_nodes = torch.nonzero(pseudo_train_mask, as_tuple=False).view(-1)
     if pseudo_nodes.numel() > 0:
         pseudo_acc = (state["pseudo_y"][pseudo_nodes] == data.y[pseudo_nodes]).float().mean().item()
@@ -218,6 +221,7 @@ def run_once(
         "cold_start_train_nodes": int(cold_start_mask.sum().item()),
         "observed_train_nodes": int(observed_train_mask.sum().item()),
         "selected_cold_start_nodes": int(state["selected_mask"].sum().item()),
+        "pseudo_label_agreement_nodes": int((state["selected_mask"] & agreement_mask).sum().item()),
         "label_ready_nodes": int(state["label_ready_mask"].sum().item()),
         "successful_recovered_nodes": int(state["successful_recovered_mask"].sum().item()),
         "pseudo_train_nodes": int(pseudo_train_mask.sum().item()),
@@ -251,6 +255,13 @@ def main():
         type=int,
         default=0,
         help="Require this many observed training labels to support a pseudo label before it enters the loss.",
+    )
+    parser.add_argument(
+        "--pseudo-label-agreement",
+        type=str,
+        default="none",
+        choices=["none", "nearest_labeled", "class_centroid", "nearest_or_centroid", "nearest_and_centroid"],
+        help="Require the primary pseudo label to agree with auxiliary pseudo-label strategies.",
     )
     parser.add_argument("--k-neighbors", type=int, default=10)
     parser.add_argument("--similarity-threshold", type=float, default=0.6)
@@ -322,6 +333,7 @@ def main():
                         pseudo_label_k=args.pseudo_label_k,
                         pseudo_label_confidence=args.pseudo_label_confidence,
                         min_pseudo_label_support=args.min_pseudo_label_support,
+                        pseudo_label_agreement=args.pseudo_label_agreement,
                         k_neighbors=args.k_neighbors,
                         similarity_threshold=args.similarity_threshold,
                         max_edges_per_recovered_node=args.max_edges_per_recovered_node,
@@ -357,6 +369,7 @@ def main():
                         "pseudo_label_k": args.pseudo_label_k,
                         "pseudo_label_confidence": args.pseudo_label_confidence,
                         "min_pseudo_label_support": args.min_pseudo_label_support,
+                        "pseudo_label_agreement": args.pseudo_label_agreement,
                         "k_neighbors": args.k_neighbors,
                         "similarity_threshold": args.similarity_threshold,
                         "max_edges_per_recovered_node": args.max_edges_per_recovered_node,
@@ -370,6 +383,7 @@ def main():
                         "cold_start_train_nodes_mean": float(np.mean([item["cold_start_train_nodes"] for item in stats])),
                         "observed_train_nodes_mean": float(np.mean([item["observed_train_nodes"] for item in stats])),
                         "selected_cold_start_nodes_mean": float(np.mean([item["selected_cold_start_nodes"] for item in stats])),
+                        "pseudo_label_agreement_nodes_mean": float(np.mean([item["pseudo_label_agreement_nodes"] for item in stats])),
                         "label_ready_nodes_mean": float(np.mean([item["label_ready_nodes"] for item in stats])),
                         "successful_recovered_nodes_mean": float(np.mean([item["successful_recovered_nodes"] for item in stats])),
                         "pseudo_train_nodes_mean": float(np.mean([item["pseudo_train_nodes"] for item in stats])),
@@ -402,6 +416,7 @@ def main():
                 "accuracy",
                 "std",
                 "selected_cold_start_nodes_mean",
+                "pseudo_label_agreement_nodes_mean",
                 "pseudo_train_nodes_mean",
                 "recovery_edges_mean",
                 "pseudo_label_accuracy_mean",

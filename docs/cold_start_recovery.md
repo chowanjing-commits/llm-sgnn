@@ -504,6 +504,37 @@ It is still useful as a diagnostic and as a building block for stronger filters,
 such as agreement between cluster-majority, nearest-labeled, and class-centroid
 pseudo labels.
 
+### Pseudo-Label Agreement Filtering
+
+We also added an optional agreement filter:
+
+```powershell
+--pseudo-label-agreement nearest_or_centroid
+```
+
+The primary pseudo-label strategy remains `cluster_majority`. The agreement
+filter computes auxiliary labels from `nearest_labeled` and/or `class_centroid`
+and allows a selected node to enter `pseudo_train_mask` only when the primary
+label agrees with the requested auxiliary strategy. Supported modes are `none`,
+`nearest_labeled`, `class_centroid`, `nearest_or_centroid`, and
+`nearest_and_centroid`. The default is `none`, preserving previous results.
+
+Initial check at admission ratio `0.50`, GraphSAGE, 3 seeds, 100 epochs:
+
+| Dataset | Agreement | Accuracy | Std | Selected cold-start | Agreement nodes | Pseudo-train | Pseudo-label acc. |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Cora | none | 0.5023 | 0.0921 | 50.0 | n/a | 50.0 | 0.3800 |
+| Cora | nearest_or_centroid | 0.6520 | 0.0410 | 50.0 | 23.7 | 23.7 | 0.6626 |
+| PubMed | none | 0.5310 | 0.1501 | 22.0 | n/a | 22.0 | 0.4091 |
+| PubMed | nearest_or_centroid | 0.6170 | 0.0746 | 22.0 | 14.3 | 14.3 | 0.5031 |
+
+Agreement filtering is more promising than minimum-support filtering in these
+checks: it substantially improves pseudo-label accuracy and downstream accuracy
+on Cora and PubMed. It still does not yet exceed the no-cold-start control, so
+it should be treated as a reliability improvement rather than evidence to
+promote cold-start to the paper's main contribution without further full-matrix
+validation.
+
 ## Review Notes
 
 Protocol audit:

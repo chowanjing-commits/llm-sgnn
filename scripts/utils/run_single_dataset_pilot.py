@@ -278,6 +278,7 @@ def train_and_eval(
     cold_start_train_mask = data.train_mask & dropped_node_mask
     label_ready_mask = torch.zeros_like(dropped_node_mask)
     pseudo_train_mask = torch.zeros_like(dropped_node_mask)
+    pseudo_label_agreement_mask = torch.zeros_like(dropped_node_mask)
     pseudo_label_accuracy = float("nan")
     pseudo_label_confidence_mean = float("nan")
     pseudo_label_support_mean = float("nan")
@@ -306,6 +307,7 @@ def train_and_eval(
         successful_recovered_mask = state["successful_recovered_mask"]
         label_ready_mask = state["label_ready_mask"]
         pseudo_train_mask = state["pseudo_train_mask"]
+        pseudo_label_agreement_mask = state["pseudo_label_agreement_mask"]
         added_recovery_edges = int(state["added_recovery_edges"])
 
         pseudo_nodes = torch.nonzero(pseudo_train_mask, as_tuple=False).view(-1)
@@ -413,6 +415,7 @@ def train_and_eval(
         "observed_train_nodes": observed_train_count,
         "cold_start_train_nodes": int(cold_start_train_mask.sum().item()),
         "selected_cold_start_nodes": int(selected_cold_start_mask.sum().item()),
+        "pseudo_label_agreement_nodes": int((selected_cold_start_mask & pseudo_label_agreement_mask).sum().item()),
         "sampled_recovered_nodes": int(sampled_recovered_mask.sum().item()),
         "label_ready_nodes": int(label_ready_mask.sum().item()),
         "successful_recovered_nodes": int(successful_recovered_mask.sum().item()),
@@ -461,6 +464,12 @@ def main():
     parser.add_argument("--pseudo-label-k", type=int, default=5)
     parser.add_argument("--pseudo-label-confidence", type=float, default=0.0)
     parser.add_argument("--min-pseudo-label-support", type=int, default=0)
+    parser.add_argument(
+        "--pseudo-label-agreement",
+        type=str,
+        default="none",
+        choices=["none", "nearest_labeled", "class_centroid", "nearest_or_centroid", "nearest_and_centroid"],
+    )
     parser.add_argument(
         "--force-regenerate-embeddings",
         action="store_true",
@@ -570,6 +579,7 @@ def main():
             pseudo_label_k=args.pseudo_label_k,
             pseudo_label_confidence=args.pseudo_label_confidence,
             min_pseudo_label_support=args.min_pseudo_label_support,
+            pseudo_label_agreement=args.pseudo_label_agreement,
             k_neighbors=args.k_neighbors,
             similarity_threshold=args.similarity_threshold,
             max_edges_per_node=args.max_edges_per_recovered_node,
@@ -587,6 +597,7 @@ def main():
         observed_train_nodes = []
         cold_start_train_nodes = []
         selected_cold_start_nodes = []
+        pseudo_label_agreement_nodes = []
         sampled_recovered_nodes = []
         label_ready_nodes = []
         successful_recovered_nodes = []
@@ -627,6 +638,7 @@ def main():
                 observed_train_nodes.append(result["observed_train_nodes"])
                 cold_start_train_nodes.append(result["cold_start_train_nodes"])
                 selected_cold_start_nodes.append(result["selected_cold_start_nodes"])
+                pseudo_label_agreement_nodes.append(result["pseudo_label_agreement_nodes"])
                 sampled_recovered_nodes.append(result["sampled_recovered_nodes"])
                 label_ready_nodes.append(result["label_ready_nodes"])
                 successful_recovered_nodes.append(result["successful_recovered_nodes"])
@@ -673,6 +685,9 @@ def main():
                 "selected_cold_start_nodes_mean": (
                     float(np.mean(selected_cold_start_nodes)) if args.cold_start else np.nan
                 ),
+                "pseudo_label_agreement_nodes_mean": (
+                    float(np.mean(pseudo_label_agreement_nodes)) if args.cold_start else np.nan
+                ),
                 "sampled_recovered_nodes_mean": float(np.mean(sampled_recovered_nodes)),
                 "label_ready_nodes_mean": float(np.mean(label_ready_nodes)),
                 "successful_recovered_nodes_mean": float(np.mean(successful_recovered_nodes)),
@@ -694,6 +709,7 @@ def main():
                 "pseudo_label_k": args.pseudo_label_k if args.cold_start else np.nan,
                 "pseudo_label_confidence": args.pseudo_label_confidence if args.cold_start else np.nan,
                 "min_pseudo_label_support": args.min_pseudo_label_support if args.cold_start else np.nan,
+                "pseudo_label_agreement": args.pseudo_label_agreement if args.cold_start else "",
                 "repair_policy": args.repair_policy,
                 "similarity_threshold": args.similarity_threshold,
                 "adaptive_threshold_alpha": args.adaptive_threshold_alpha,

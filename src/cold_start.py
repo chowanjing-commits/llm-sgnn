@@ -20,6 +20,7 @@ class ColdStartPipelineConfig:
     pseudo_label_k: int = 5
     pseudo_label_confidence: float = 0.0
     min_pseudo_label_support: int = 0
+    pseudo_label_agreement: str = "none"
     k_neighbors: int = 10
     similarity_threshold: float = 0.6
     max_edges_per_node: int = 10
@@ -328,6 +329,58 @@ def assign_pseudo_labels(
     raise ValueError(f"Unknown pseudo-label strategy: {strategy}")
 
 
+def build_pseudo_label_agreement_mask(
+    x_llm,
+    observed_train_mask,
+    selected_mask,
+    y,
+    num_classes,
+    primary_pseudo_y,
+    agreement,
+    pseudo_label_k,
+    seed,
+):
+    agreement = str(agreement or "none")
+    if agreement == "none":
+        return torch.ones_like(selected_mask, dtype=torch.bool)
+
+    helper_strategies = []
+    if agreement == "nearest_labeled":
+        helper_strategies = ["nearest_labeled"]
+    elif agreement == "class_centroid":
+        helper_strategies = ["class_centroid"]
+    elif agreement == "nearest_or_centroid":
+        helper_strategies = ["nearest_labeled", "class_centroid"]
+    elif agreement == "nearest_and_centroid":
+        helper_strategies = ["nearest_labeled", "class_centroid"]
+    else:
+        raise ValueError(f"Unknown pseudo-label agreement mode: {agreement}")
+
+    selected_ready = selected_mask.clone()
+    helper_matches = []
+    for strategy in helper_strategies:
+        helper_y, helper_confidence, _ = assign_pseudo_labels(
+            x_llm=x_llm,
+            observed_train_mask=observed_train_mask,
+            selected_mask=selected_mask,
+            y=y,
+            num_classes=num_classes,
+            strategy=strategy,
+            pseudo_label_k=pseudo_label_k,
+            seed=seed,
+        )
+        helper_valid = selected_mask & torch.isfinite(helper_confidence)
+        helper_matches.append(helper_valid & (helper_y == primary_pseudo_y))
+
+    if agreement == "nearest_or_centroid":
+        agreement_mask = helper_matches[0] | helper_matches[1]
+    else:
+        agreement_mask = helper_matches[0]
+        for match in helper_matches[1:]:
+            agreement_mask = agreement_mask & match
+    return selected_ready & agreement_mask
+
+
 def build_semantic_recovery_edges(
     x_llm,
     sparse_edge_index,
@@ -444,6 +497,7 @@ def build_cold_start_training_state(
     pseudo_label_k,
     pseudo_label_confidence,
     min_pseudo_label_support,
+    pseudo_label_agreement,
     k_neighbors,
     similarity_threshold,
     max_edges_per_node,
@@ -470,12 +524,24 @@ def build_cold_start_training_state(
         pseudo_label_k=pseudo_label_k,
         seed=seed,
     )
+    pseudo_label_agreement_mask = build_pseudo_label_agreement_mask(
+        x_llm=x_llm,
+        observed_train_mask=observed_train_mask,
+        selected_mask=selected_mask,
+        y=y,
+        num_classes=num_classes,
+        primary_pseudo_y=pseudo_y,
+        agreement=pseudo_label_agreement,
+        pseudo_label_k=pseudo_label_k,
+        seed=seed,
+    )
     support_ready_mask = pseudo_label_support >= max(0, int(min_pseudo_label_support))
     label_ready_mask = (
         selected_mask
         & torch.isfinite(pseudo_confidence)
         & (pseudo_confidence >= pseudo_label_confidence)
         & support_ready_mask
+        & pseudo_label_agreement_mask
     )
     repaired_edge_index, successful_recovered_mask, added_recovery_edges = build_semantic_recovery_edges(
         x_llm=x_llm,
@@ -500,6 +566,7 @@ def build_cold_start_training_state(
         "center_distance": center_distance,
         "pseudo_confidence": pseudo_confidence,
         "pseudo_label_support": pseudo_label_support,
+        "pseudo_label_agreement_mask": pseudo_label_agreement_mask,
         "label_ready_mask": label_ready_mask,
         "successful_recovered_mask": successful_recovered_mask,
         "pseudo_train_mask": pseudo_train_mask,
@@ -533,6 +600,7 @@ def build_cold_start_training_state_from_config(
         pseudo_label_k=pipeline_config.pseudo_label_k,
         pseudo_label_confidence=pipeline_config.pseudo_label_confidence,
         min_pseudo_label_support=pipeline_config.min_pseudo_label_support,
+        pseudo_label_agreement=pipeline_config.pseudo_label_agreement,
         k_neighbors=pipeline_config.k_neighbors,
         similarity_threshold=pipeline_config.similarity_threshold,
         max_edges_per_node=pipeline_config.max_edges_per_node,
