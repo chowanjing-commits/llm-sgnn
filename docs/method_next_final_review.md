@@ -9,7 +9,7 @@ extension and related paper updates.
 ## Branch State
 
 - Branch: `method-next`
-- Remote tracking state at review time: `method-next...origin/method-next [ahead 19]`
+- Check the live remote tracking state with `git status --short --branch`.
 - Main branch was not modified or merged.
 - No push has been performed from this review pass.
 
@@ -88,31 +88,19 @@ ignored and should not be committed:
 - `checkpoints/`
 - non-allowlisted `logs/`
 
-## Ahead Commits
+## Ahead Commit Themes
 
-Current commits ahead of `origin/method-next`:
+Use the following command for the live ahead list:
 
-```text
-49934ce Add method-next final review snapshot
-0026e56 Add repository hygiene verification
-85a1be6 Scrub hidden cold-start labels from pseudo targets
-ba4fea1 Tighten cold-start main-entry metadata
-c1ad241 Verify cold-start appendix tables
-daaf46c Clarify cold-start paper positioning
-f741e43 Add verified related work citations
-dce7d73 Verify selective cold-start pseudo labeling
-a245576 Verify cold-start pseudo-label loss weighting
-db11736 Record main-entry high-reliability pseudo-label results
-015c037 Record high-reliability pseudo-label subset
-d13ede0 Record cold-start main-entry controls
-f10ec76 Document edge-only cold-start integration
-1cc8c93 Add cold-start pseudo-label loss weighting
-98030b6 Record full agreement filter results
-cdd05c9 Verify no-cold-start control
-987a4a8 Add cold-start pseudo-label agreement filter
-35d5f92 Add cold-start pseudo-label support filter
-05b7a87 Record formal cold-start controls
+```powershell
+git log --oneline origin/method-next..HEAD
 ```
+
+The ahead commits cover formal cold-start controls, pseudo-label support and
+agreement filters, pseudo-label loss weighting, edge-only and high-reliability
+experiment records, main-entry metadata hardening, hidden-label scrubbing,
+paper-table verification, repository hygiene verification, and this review
+snapshot.
 
 ## Recommended Next Decision
 
