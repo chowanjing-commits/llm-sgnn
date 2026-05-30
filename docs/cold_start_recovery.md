@@ -420,9 +420,52 @@ Output files:
 These results are integration checks, not a replacement for the budget ablation
 above. They show that the main runner can execute the full path:
 cached/raw-text features -> admission -> pseudo labels -> semantic edges ->
-training with pseudo labels. The full arXiv GraphSAGE run matches the standalone
-full-graph budget scale at ratio `0.50`, which supports using the integrated
-runner for later main-method experiments.
+training with pseudo labels. These early runs used the default
+`--pseudo-label-loss-weight 1.0`, so they are a stress test of pseudo-supervised
+training rather than the final recommended cold-start objective. The full arXiv
+GraphSAGE run matches the standalone full-graph budget scale at ratio `0.50`,
+which supports using the integrated runner for later main-method experiments.
+
+### Edge-Only Main-Method Integration Runs
+
+After adding the agreement filter and pseudo-label loss weighting, we reran the
+main entry with the safer edge-only setting:
+
+```powershell
+--pseudo-label-agreement nearest_or_centroid --pseudo-label-loss-weight 0.0
+```
+
+The run keeps admitted cold-start nodes and recovered semantic edges in the
+message-passing graph, but removes pseudo labels from the supervised loss.
+
+Output files:
+
+- `logs/cora_single_pilot_coldstart_drop0_node75_20260530_162230.csv`
+- `logs/pubmed_single_pilot_coldstart_drop0_node75_20260530_162323.csv`
+- `logs/wikics_single_pilot_coldstart_drop0_node75_20260530_162614.csv`
+- `logs/arxiv_single_pilot_coldstart_drop0_node75_20260530_163630.csv`
+
+| Dataset | Backbone | Accuracy | Std | Selected cold-start | Pseudo-train tracked | Recovery edges | Pseudo-label acc. |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Cora | GCN | 0.7213 | 0.0170 | 50.0 | 23.7 | 99.7 | 0.6626 |
+| Cora | GAT | 0.7100 | 0.0188 | 50.0 | 23.7 | 99.7 | 0.6626 |
+| Cora | GraphSAGE | 0.7230 | 0.0085 | 50.0 | 23.7 | 99.7 | 0.6626 |
+| PubMed | GCN | 0.6873 | 0.0202 | 22.0 | 14.3 | 45.7 | 0.5031 |
+| PubMed | GAT | 0.7197 | 0.0284 | 22.0 | 14.3 | 45.7 | 0.5031 |
+| PubMed | GraphSAGE | 0.6817 | 0.0458 | 22.0 | 14.3 | 45.7 | 0.5031 |
+| WikiCS | GCN | 0.7010 | 0.0089 | 217.0 | 133.3 | 461.3 | 0.7407 |
+| WikiCS | GAT | 0.6976 | 0.0072 | 217.0 | 133.3 | 461.3 | 0.7407 |
+| WikiCS | GraphSAGE | 0.7114 | 0.0042 | 217.0 | 133.3 | 461.3 | 0.7407 |
+| arXiv-full | GCN | 0.5804 | 0.0021 | 34102.0 | 22048.3 | 71104.0 | 0.6630 |
+| arXiv-full | GAT | 0.5964 | 0.0024 | 34102.0 | 22048.3 | 71104.0 | 0.6630 |
+| arXiv-full | GraphSAGE | 0.6070 | 0.0026 | 34102.0 | 22048.3 | 71104.0 | 0.6630 |
+
+Compared with the default pseudo-supervised integration table above, the
+edge-only objective improves every listed model and dataset. The strongest
+full-arXiv backbone remains GraphSAGE, but the Cora/PubMed/WikiCS results show
+that the safer objective is not tied to a single backbone. `Pseudo-train tracked`
+counts nodes passing pseudo-label filters for diagnostics; with loss weight
+`0.0`, they do not contribute supervised loss.
 
 ## Formal Cold-Start Controls
 
@@ -589,10 +632,10 @@ Output files:
 
 | Dataset | No cold-start | Agreement, w=1.0 | Agreement, w=0.3 | Agreement, w=0.0 | Selected cold-start | Pseudo-train | Recovery edges | Pseudo-label acc. |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Cora | 0.7250 ± 0.0073 | 0.6520 ± 0.0410 | 0.6737 ± 0.0176 | 0.7230 ± 0.0085 | 50.0 | 23.7 | 99.7 | 0.6626 |
-| PubMed | 0.6800 ± 0.0463 | 0.6170 ± 0.0746 | 0.6247 ± 0.0890 | 0.6817 ± 0.0458 | 22.0 | 14.3 | 45.7 | 0.5031 |
-| WikiCS | 0.7132 ± 0.0070 | 0.6822 ± 0.0187 | 0.7002 ± 0.0113 | 0.7114 ± 0.0042 | 217.0 | 133.3 | 461.3 | 0.7407 |
-| arXiv-full | 0.6109 ± 0.0035 | 0.6039 ± 0.0033 | 0.6083 ± 0.0027 | 0.6089 ± 0.0028 | 34102.0 | 22048.3 | 71104.0 | 0.6630 |
+| Cora | 0.7250 +/- 0.0073 | 0.6520 +/- 0.0410 | 0.6737 +/- 0.0176 | 0.7230 +/- 0.0085 | 50.0 | 23.7 | 99.7 | 0.6626 |
+| PubMed | 0.6800 +/- 0.0463 | 0.6170 +/- 0.0746 | 0.6247 +/- 0.0890 | 0.6817 +/- 0.0458 | 22.0 | 14.3 | 45.7 | 0.5031 |
+| WikiCS | 0.7132 +/- 0.0070 | 0.6822 +/- 0.0187 | 0.7002 +/- 0.0113 | 0.7114 +/- 0.0042 | 217.0 | 133.3 | 461.3 | 0.7407 |
+| arXiv-full | 0.6109 +/- 0.0035 | 0.6039 +/- 0.0033 | 0.6083 +/- 0.0027 | 0.6089 +/- 0.0028 | 34102.0 | 22048.3 | 71104.0 | 0.6630 |
 
 The edge-only variant is the most stable setting in this check. It nearly
 matches the no-cold-start control on all four datasets, while `0.3` remains
