@@ -654,7 +654,7 @@ b = \min(k,\ b_{max},\ \lceil d_{obs} \rceil).
 
 针对“剩余观测标签过少是否削弱聚类伪标签”的问题，本文进一步加入伪标签支持度诊断。支持度表示一个准入节点的伪标签由多少观测训练标签支持，并可通过 `--min-pseudo-label-support` 过滤低支持节点。初步结果显示，支持度过滤在 PubMed 上略有改善，但在 Cora 上降低准确率，说明单独依赖支持度阈值还不足以解决伪标签噪声；后续更有希望的方向是结合支持度、置信度和多种伪标签策略一致性进行细筛选。
 
-进一步的初步结果支持这一判断：当要求聚类多数投票伪标签与近邻标签或类中心标签一致后，Cora 的伪标签准确率从 38.00% 提升到 66.26%，测试准确率从 50.23% 提升到 65.20%；PubMed 的伪标签准确率从 40.91% 提升到 50.31%，测试准确率从 53.10% 提升到 61.70%。这些结果说明冷启动失败的关键瓶颈确实在伪标签可靠性，而不是聚类簇编号和真实类别编号不一致；不过该一致性过滤仍未超过不加入 cold-start 节点的控制组，因此本文仍保持附录扩展定位。
+进一步结果支持这一判断：当要求聚类多数投票伪标签与近邻标签或类中心标签一致后，四个数据集上的伪标签准确率均明显提高。Cora 从 38.00% 提升到 66.26%，PubMed 从 40.91% 提升到 50.31%，WikiCS 从 50.69% 提升到 74.07%，完整 ogbn-arxiv 从 46.99% 提升到 66.30%；对应测试准确率分别从 50.23%、53.10%、57.79% 和 54.89% 提升到 65.20%、61.70%、68.22% 和 60.39%。这些结果说明冷启动失败的关键瓶颈确实在伪标签可靠性，而不是聚类簇编号和真实类别编号不一致；不过该一致性过滤仍未超过不加入 cold-start 节点的控制组，因此本文仍保持附录扩展定位。
 
 ## 附录 E. 复现材料与结果文件
 
@@ -690,6 +690,10 @@ b = \min(k,\ b_{max},\ \lceil d_{obs} \rceil).
 | 冷启动控制 | `logs/cold_start_formal_pubmed_sage_summary_20260530_142216.csv` | 冷启动四条件控制的 PubMed GraphSAGE 结果 |
 | 冷启动控制 | `logs/cold_start_formal_wikics_sage_summary_20260530_142300.csv` | 冷启动四条件控制的 WikiCS GraphSAGE 结果 |
 | 冷启动控制 | `logs/cold_start_formal_arxiv_full_sage_summary_20260530_143237.csv` | 冷启动四条件控制的完整 ogbn-arxiv GraphSAGE 结果 |
+| 冷启动一致性过滤 | `logs/cold_start_agree_or_cora_sage_summary_20260530_145743.csv` | 一致性过滤的 Cora GraphSAGE 结果 |
+| 冷启动一致性过滤 | `logs/cold_start_agree_or_pubmed_sage_summary_20260530_145827.csv` | 一致性过滤的 PubMed GraphSAGE 结果 |
+| 冷启动一致性过滤 | `logs/cold_start_agree_or_wikics_sage_summary_20260530_154715.csv` | 一致性过滤的 WikiCS GraphSAGE 结果 |
+| 冷启动一致性过滤 | `logs/cold_start_agree_or_arxiv_full_sage_summary_20260530_155008.csv` | 一致性过滤的完整 ogbn-arxiv GraphSAGE 结果 |
 | 冷启动准入 | `src/cold_start.py` | 文本特征生成、冷启动配置、准入、伪标签、语义连边和训练掩码构造组件 |
 | 冷启动主入口 | `scripts/utils/run_single_dataset_pilot.py` | 支持 `--cold-start` 的主训练入口，用于从主方法路径调用冷启动流程 |
 | 冷启动准入 | `scripts/utils/summarize_cold_start_budget.py` | 从冷启动预算 CSV 生成表 D1-D2 的 Markdown |

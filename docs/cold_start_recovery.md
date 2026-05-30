@@ -527,7 +527,14 @@ label agrees with the requested auxiliary strategy. Supported modes are `none`,
 `nearest_labeled`, `class_centroid`, `nearest_or_centroid`, and
 `nearest_and_centroid`. The default is `none`, preserving previous results.
 
-Initial check at admission ratio `0.50`, GraphSAGE, 3 seeds, 100 epochs:
+Agreement runs at admission ratio `0.50`, GraphSAGE, 3 seeds, 100 epochs:
+
+Output files:
+
+- `logs/cold_start_agree_or_cora_sage_summary_20260530_145743.csv`
+- `logs/cold_start_agree_or_pubmed_sage_summary_20260530_145827.csv`
+- `logs/cold_start_agree_or_wikics_sage_summary_20260530_154715.csv`
+- `logs/cold_start_agree_or_arxiv_full_sage_summary_20260530_155008.csv`
 
 | Dataset | Agreement | Accuracy | Std | Selected cold-start | Agreement nodes | Pseudo-train | Pseudo-label acc. |
 |---|---|---:|---:|---:|---:|---:|---:|
@@ -535,13 +542,17 @@ Initial check at admission ratio `0.50`, GraphSAGE, 3 seeds, 100 epochs:
 | Cora | nearest_or_centroid | 0.6520 | 0.0410 | 50.0 | 23.7 | 23.7 | 0.6626 |
 | PubMed | none | 0.5310 | 0.1501 | 22.0 | n/a | 22.0 | 0.4091 |
 | PubMed | nearest_or_centroid | 0.6170 | 0.0746 | 22.0 | 14.3 | 14.3 | 0.5031 |
+| WikiCS | none | 0.5779 | 0.0247 | 217.0 | n/a | 217.0 | 0.5069 |
+| WikiCS | nearest_or_centroid | 0.6822 | 0.0187 | 217.0 | 133.3 | 133.3 | 0.7407 |
+| arXiv-full | none | 0.5489 | 0.0047 | 34102.0 | n/a | 34102.0 | 0.4699 |
+| arXiv-full | nearest_or_centroid | 0.6039 | 0.0033 | 34102.0 | 22048.3 | 22048.3 | 0.6630 |
 
 Agreement filtering is more promising than minimum-support filtering in these
 checks: it substantially improves pseudo-label accuracy and downstream accuracy
-on Cora and PubMed. It still does not yet exceed the no-cold-start control, so
-it should be treated as a reliability improvement rather than evidence to
-promote cold-start to the paper's main contribution without further full-matrix
-validation.
+on all four datasets. It nearly closes the gap to the no-cold-start control on
+full arXiv, but still remains below no-cold-start on the current benchmark
+protocol, so it should be treated as a reliability improvement rather than
+evidence to promote cold-start to the paper's main contribution.
 
 ## Review Notes
 
