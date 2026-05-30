@@ -56,10 +56,11 @@ python scripts\utils\run_single_dataset_pilot.py --cold-start
 When `--cold-start` is enabled, Ours/`LLM_GNN_*` models call
 `build_cold_start_training_state_from_config` before training. The runner then
 uses the pipeline's recovered `edge_index`, `pseudo_y`, and `train_mask` for the
-supervised loss. This is the main-method integration path; it avoids the earlier
-random recovery path that reintroduced the dropped training nodes' ground-truth
-labels. Non-repair baselines and runs without `--cold-start` keep the previous
-behavior for backward-compatible comparisons.
+supervised loss, with `--pseudo-label-loss-weight` controlling how much
+pseudo-labeled cold-start nodes contribute. This is the main-method integration
+path; it avoids the earlier random recovery path that reintroduced the dropped
+training nodes' ground-truth labels. Non-repair baselines and runs without
+`--cold-start` keep the previous behavior for backward-compatible comparisons.
 
 To validate the raw-text-to-feature segment from the main runner, pass:
 
@@ -143,6 +144,13 @@ Other supported strategies:
 loss. Nodes below the threshold may still have recovery edges, but they are not
 used as labeled training examples.
 
+`--pseudo-label-loss-weight` controls the supervised-loss weight of
+pseudo-labeled cold-start nodes that pass the confidence/support/agreement
+filters. The default `1.0` preserves the original pseudo-supervised protocol.
+Setting it to `0.0` keeps admitted nodes and recovered semantic edges in the
+message-passing graph but removes pseudo labels from the supervised loss; this is
+the edge-only cold-start variant.
+
 ## Edge Recovery
 
 Admitted cold-start nodes are connected back to the sparse graph by semantic kNN
@@ -163,7 +171,9 @@ Important fields:
 - `selected_cold_start_nodes_mean`: admitted nodes before pseudo-label filtering.
 - `sampled_recovered_nodes_mean`: legacy recovery column; in cold-start main-entry
   logs it is kept as a backward-compatible alias for selected cold-start nodes.
-- `pseudo_train_nodes_mean`: admitted nodes that enter the supervised loss.
+- `pseudo_train_nodes_mean`: admitted nodes that pass pseudo-label filters; their
+  actual supervised-loss contribution is controlled by
+  `pseudo_label_loss_weight`.
 - `recovery_edges_mean`: semantic edges added for admitted nodes.
 - `pseudo_label_accuracy_mean`: diagnostic only; not available to the method.
 - `selected_center_distance_mean`: representativeness diagnostic for clustering.
@@ -554,6 +564,45 @@ full arXiv, but still remains below no-cold-start on the current benchmark
 protocol, so it should be treated as a reliability improvement rather than
 evidence to promote cold-start to the paper's main contribution.
 
+### Pseudo-Label Loss Weighting
+
+The agreement results suggested that pseudo-label noise, rather than admission
+or edge recovery alone, was the main bottleneck. We therefore added
+`--pseudo-label-loss-weight` and compared three settings under the same
+agreement filter, admission ratio `0.50`, GraphSAGE, 3 seeds, and 100 epochs:
+
+- `1.0`: pseudo labels are treated like ordinary training labels.
+- `0.3`: pseudo labels contribute to the supervised loss with reduced weight.
+- `0.0`: edge-only cold-start recovery; admitted nodes and semantic edges remain
+  in the graph, but pseudo labels do not contribute to the supervised loss.
+
+Output files:
+
+- `logs/cold_start_agree_edgeonly_cora_sage_summary_20260530_160337.csv`
+- `logs/cold_start_agree_edgeonly_pubmed_sage_summary_20260530_160611.csv`
+- `logs/cold_start_agree_edgeonly_wikics_sage_summary_20260530_160634.csv`
+- `logs/cold_start_agree_edgeonly_arxiv_full_sage_summary_20260530_161051.csv`
+- `logs/cold_start_agree_w03_cora_sage_summary_20260530_161119.csv`
+- `logs/cold_start_agree_w03_pubmed_sage_summary_20260530_161145.csv`
+- `logs/cold_start_agree_w03_wikics_sage_summary_20260530_161210.csv`
+- `logs/cold_start_agree_w03_arxiv_full_sage_summary_20260530_161438.csv`
+
+| Dataset | No cold-start | Agreement, w=1.0 | Agreement, w=0.3 | Agreement, w=0.0 | Selected cold-start | Pseudo-train | Recovery edges | Pseudo-label acc. |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Cora | 0.7250 ± 0.0073 | 0.6520 ± 0.0410 | 0.6737 ± 0.0176 | 0.7230 ± 0.0085 | 50.0 | 23.7 | 99.7 | 0.6626 |
+| PubMed | 0.6800 ± 0.0463 | 0.6170 ± 0.0746 | 0.6247 ± 0.0890 | 0.6817 ± 0.0458 | 22.0 | 14.3 | 45.7 | 0.5031 |
+| WikiCS | 0.7132 ± 0.0070 | 0.6822 ± 0.0187 | 0.7002 ± 0.0113 | 0.7114 ± 0.0042 | 217.0 | 133.3 | 461.3 | 0.7407 |
+| arXiv-full | 0.6109 ± 0.0035 | 0.6039 ± 0.0033 | 0.6083 ± 0.0027 | 0.6089 ± 0.0028 | 34102.0 | 22048.3 | 71104.0 | 0.6630 |
+
+The edge-only variant is the most stable setting in this check. It nearly
+matches the no-cold-start control on all four datasets, while `0.3` remains
+worse on Cora, PubMed, and WikiCS and does not improve full arXiv. The resulting
+interpretation is narrower but cleaner: cold-start admission and semantic edge
+recovery can safely add text-only nodes for message passing, but pseudo labels
+should remain diagnostic by default. Any supervised use of pseudo labels should
+be explicitly weighted and separately validated until a stronger reliability
+mechanism consistently beats the no-cold-start control.
+
 ## Review Notes
 
 Protocol audit:
@@ -564,8 +613,9 @@ Protocol audit:
 - `ColdStartPipelineConfig` groups the admission, pseudo-label, and edge-recovery
   hyperparameters for main-method integration.
 - `scripts/utils/run_single_dataset_pilot.py --cold-start` now routes Ours
-  models through the cold-start pipeline and trains on `pseudo_y` rather than
-  the hidden labels of dropped cold-start nodes.
+  models through the cold-start pipeline and uses `pseudo_y` rather than the
+  hidden labels of dropped cold-start nodes. The contribution of pseudo-labeled
+  nodes is controlled by `--pseudo-label-loss-weight`.
 - Cold-start admission uses only `x_llm` and the cold-start candidate mask.
 - `x_llm` can be loaded from cache or regenerated from raw text with
   `--force-regenerate-embeddings`.
@@ -578,6 +628,9 @@ Protocol audit:
 - If no finite pseudo-label confidence is produced for an admitted node, that
   node is excluded from `pseudo_train_mask` even when the confidence threshold is
   `0.0`; this prevents default labels from leaking into the supervised loss.
+- With `--pseudo-label-loss-weight 0.0`, nodes in `pseudo_train_mask` are still
+  tracked for diagnostics, but their pseudo labels have zero supervised-loss
+  weight. They can still influence message passing through recovered edges.
 - `cluster_representative` and `random` share the same `admission_ratio` budget.
 - Full arXiv runs use `--arxiv-subgraph-size 0`.
 

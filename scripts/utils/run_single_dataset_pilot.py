@@ -256,6 +256,7 @@ def train_and_eval(
     repair_policy="fixed",
     adaptive_threshold_alpha=0.0,
     cold_start_config=None,
+    pseudo_label_loss_weight=1.0,
     seed=0,
 ):
     device = config.DEVICE
@@ -353,6 +354,7 @@ def train_and_eval(
         test_mask=data.test_mask.to(device),
         dropped_node_mask=dropped_node_mask.to(device),
         candidate_node_mask=candidate_node_mask.to(device),
+        pseudo_train_mask=pseudo_train_mask.to(device),
     )
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config.LEARNING_RATE, weight_decay=config.WEIGHT_DECAY)
@@ -378,7 +380,20 @@ def train_and_eval(
         else:
             out = model(x, exp_data.edge_index)
             effective_train_mask = train_mask
-        loss = F.cross_entropy(out[effective_train_mask], exp_data.train_y[effective_train_mask])
+        loss_values = F.cross_entropy(
+            out[effective_train_mask],
+            exp_data.train_y[effective_train_mask],
+            reduction="none",
+        )
+        loss_weights = torch.ones_like(loss_values)
+        if pseudo_label_loss_weight != 1.0:
+            loss_weights[exp_data.pseudo_train_mask[effective_train_mask]] = max(
+                0.0,
+                float(pseudo_label_loss_weight),
+            )
+        if loss_weights.sum().item() <= 0:
+            raise RuntimeError("No positive-weight training nodes remain after pseudo-label loss weighting.")
+        loss = (loss_values * loss_weights).sum() / loss_weights.sum()
         loss.backward()
         optimizer.step()
 
@@ -463,6 +478,12 @@ def main():
     )
     parser.add_argument("--pseudo-label-k", type=int, default=5)
     parser.add_argument("--pseudo-label-confidence", type=float, default=0.0)
+    parser.add_argument(
+        "--pseudo-label-loss-weight",
+        type=float,
+        default=1.0,
+        help="Sample weight for pseudo-labeled cold-start nodes in the supervised loss. Use 0 for edge-only recovery.",
+    )
     parser.add_argument("--min-pseudo-label-support", type=int, default=0)
     parser.add_argument(
         "--pseudo-label-agreement",
@@ -627,6 +648,7 @@ def main():
                     repair_policy=args.repair_policy,
                     adaptive_threshold_alpha=args.adaptive_threshold_alpha,
                     cold_start_config=cold_start_config if is_repair_model(model_type) else None,
+                    pseudo_label_loss_weight=args.pseudo_label_loss_weight,
                     seed=seed + split_idx * 100,
                 )
                 acc = result["accuracy"]
@@ -708,6 +730,7 @@ def main():
                 "pseudo_label_strategy": args.pseudo_label_strategy if args.cold_start else "",
                 "pseudo_label_k": args.pseudo_label_k if args.cold_start else np.nan,
                 "pseudo_label_confidence": args.pseudo_label_confidence if args.cold_start else np.nan,
+                "pseudo_label_loss_weight": args.pseudo_label_loss_weight if args.cold_start else np.nan,
                 "min_pseudo_label_support": args.min_pseudo_label_support if args.cold_start else np.nan,
                 "pseudo_label_agreement": args.pseudo_label_agreement if args.cold_start else "",
                 "repair_policy": args.repair_policy,

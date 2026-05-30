@@ -72,7 +72,28 @@ def parse_csv_floats(value):
     return [float(item) for item in value.split(",") if item.strip()]
 
 
-def train_gnn(data, edge_index, train_mask, train_y, num_epochs, model_type, k_neighbors, beta):
+def weighted_supervised_loss(out, train_y, train_mask, pseudo_train_mask, pseudo_label_loss_weight):
+    loss_values = F.cross_entropy(out[train_mask], train_y[train_mask], reduction="none")
+    weights = torch.ones_like(loss_values)
+    if pseudo_train_mask is not None and pseudo_label_loss_weight != 1.0:
+        weights[pseudo_train_mask[train_mask]] = max(0.0, float(pseudo_label_loss_weight))
+    if weights.sum().item() <= 0:
+        raise RuntimeError("No positive-weight training nodes remain after pseudo-label loss weighting.")
+    return (loss_values * weights).sum() / weights.sum()
+
+
+def train_gnn(
+    data,
+    edge_index,
+    train_mask,
+    train_y,
+    num_epochs,
+    model_type,
+    k_neighbors,
+    beta,
+    pseudo_train_mask=None,
+    pseudo_label_loss_weight=1.0,
+):
     device = config.DEVICE
     x = data.x_llm.to(device)
     y_train = train_y.to(device)
@@ -90,6 +111,8 @@ def train_gnn(data, edge_index, train_mask, train_y, num_epochs, model_type, k_n
     ).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=config.LEARNING_RATE, weight_decay=config.WEIGHT_DECAY)
     train_mask = train_mask.to(device)
+    if pseudo_train_mask is not None:
+        pseudo_train_mask = pseudo_train_mask.to(device)
     if not train_mask.any():
         raise RuntimeError(
             "No training nodes remain after cold-start admission. "
@@ -104,7 +127,13 @@ def train_gnn(data, edge_index, train_mask, train_y, num_epochs, model_type, k_n
         model.train()
         optimizer.zero_grad()
         out = model.gnn(x, edge_index) if is_repair_model(model_type) else model(x, edge_index)
-        loss = F.cross_entropy(out[train_mask], y_train[train_mask])
+        loss = weighted_supervised_loss(
+            out=out,
+            train_y=y_train,
+            train_mask=train_mask,
+            pseudo_train_mask=pseudo_train_mask,
+            pseudo_label_loss_weight=pseudo_label_loss_weight,
+        )
         loss.backward()
         optimizer.step()
 
@@ -145,6 +174,7 @@ def run_once(
     model_type,
     beta,
     num_epochs,
+    pseudo_label_loss_weight,
 ):
     sparse_edge_index, dropped_node_mask = build_corrupted_graph(
         data,
@@ -196,6 +226,8 @@ def run_once(
         model_type=model_type,
         k_neighbors=k_neighbors,
         beta=beta,
+        pseudo_train_mask=state["pseudo_train_mask"],
+        pseudo_label_loss_weight=pseudo_label_loss_weight,
     )
 
     pseudo_train_mask = state["pseudo_train_mask"]
@@ -250,6 +282,12 @@ def main():
                         choices=["cluster_majority", "nearest_labeled", "class_centroid"])
     parser.add_argument("--pseudo-label-k", type=int, default=5)
     parser.add_argument("--pseudo-label-confidence", type=float, default=0.0)
+    parser.add_argument(
+        "--pseudo-label-loss-weight",
+        type=float,
+        default=1.0,
+        help="Sample weight for pseudo-labeled cold-start nodes in the supervised loss. Use 0 for edge-only recovery.",
+    )
     parser.add_argument(
         "--min-pseudo-label-support",
         type=int,
@@ -342,6 +380,7 @@ def main():
                         model_type=args.model_type,
                         beta=args.beta,
                         num_epochs=args.num_epochs,
+                        pseudo_label_loss_weight=args.pseudo_label_loss_weight,
                     )
                     row = {"dataset": dataset_name, "split": split_idx, "seed": seed, **row}
                     raw_rows.append(row)
@@ -368,6 +407,7 @@ def main():
                         "pseudo_label_strategy": args.pseudo_label_strategy,
                         "pseudo_label_k": args.pseudo_label_k,
                         "pseudo_label_confidence": args.pseudo_label_confidence,
+                        "pseudo_label_loss_weight": args.pseudo_label_loss_weight,
                         "min_pseudo_label_support": args.min_pseudo_label_support,
                         "pseudo_label_agreement": args.pseudo_label_agreement,
                         "k_neighbors": args.k_neighbors,
