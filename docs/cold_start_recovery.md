@@ -149,6 +149,14 @@ reliability gates. This lets the pipeline keep an admitted text-only node in the
 message-passing graph while withholding its pseudo label from supervision unless
 the pseudo label is sufficiently reliable.
 
+This makes cold-start admission and pseudo-supervision intentionally separable:
+`selected_mask` records text-only nodes admitted to the graph and eligible for
+semantic edge recovery, while `pseudo_train_mask` records only the admitted
+nodes that pass the configured reliability gates. Raising
+`--pseudo-label-confidence`, `--min-pseudo-label-support`, or
+`--pseudo-label-agreement` should shrink `pseudo_train_mask` without removing
+low-reliability nodes from the recovered message-passing graph.
+
 `--pseudo-label-loss-weight` controls the supervised-loss weight of
 pseudo-labeled cold-start nodes that pass the confidence/support/agreement
 filters. The default `1.0` preserves the original pseudo-supervised protocol.
@@ -772,6 +780,10 @@ Protocol audit:
 - If no finite pseudo-label confidence is produced for an admitted node, that
   node is excluded from `pseudo_train_mask` even when the confidence threshold is
   `0.0`; this prevents default labels from leaking into the supervised loss.
+- `scripts/utils/verify_selective_pseudo_label_filter.py` checks the selective
+  filtering invariant directly: tightening the pseudo-label confidence threshold
+  leaves admitted and recovered nodes in the graph, but withholds
+  low-confidence nodes from `pseudo_train_mask`.
 - With `--pseudo-label-loss-weight 0.0`, nodes in `pseudo_train_mask` are still
   tracked for diagnostics, but their pseudo labels have zero supervised-loss
   weight. They can still influence message passing through recovered edges.
@@ -803,11 +815,14 @@ Protocol invariant check:
 ```powershell
 conda run -n llm-sgnn python scripts\utils\verify_cold_start_protocol.py
 conda run -n llm-sgnn python scripts\utils\verify_no_cold_start_control.py
+conda run -n llm-sgnn python scripts\utils\verify_selective_pseudo_label_filter.py
 conda run -n llm-sgnn python scripts\utils\verify_pseudo_label_loss_weight.py
 ```
 
 This synthetic check changes the hidden ground-truth labels of cold-start nodes
 and asserts that admission, recovered edges, pseudo-train membership, and the
-pseudo labels used by the supervised loss do not change. The loss-weight check
-separately verifies that edge-only runs do not consume pseudo labels through the
+pseudo labels used by the supervised loss do not change. The selective-filter
+check separately verifies that low-reliability admitted nodes can stay in the
+recovered graph without entering pseudo-supervised training. The loss-weight
+check verifies that edge-only runs do not consume pseudo labels through the
 supervised loss.

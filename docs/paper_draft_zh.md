@@ -807,6 +807,7 @@ b = \min(k,\ b_{max},\ \lceil d_{obs} \rceil).
 | 冷启动主入口 | `scripts/utils/run_single_dataset_pilot.py` | 支持 `--cold-start` 的主训练入口，用于从主方法路径调用冷启动流程 |
 | 冷启动准入 | `scripts/utils/summarize_cold_start_budget.py` | 从冷启动预算 CSV 生成表 D1-D2 的 Markdown |
 | 冷启动验证 | `scripts/utils/verify_no_cold_start_control.py` | 验证不加入 cold-start 节点控制组不会恢复边或使用隐藏标签 |
+| 冷启动验证 | `scripts/utils/verify_selective_pseudo_label_filter.py` | 验证提高伪标签可靠性阈值时，低置信准入节点只参与连边和消息传递，不进入伪标签监督训练 |
 | 冷启动验证 | `scripts/utils/verify_pseudo_label_loss_weight.py` | 验证 edge-only 设置下伪标签不会通过监督损失影响训练 |
 
 表注：表中列出的 CSV 均为轻量结果记录，适合随代码和论文草稿保存。完整 embedding、原始数据和本地下载的生成模型体积较大，应通过数据准备脚本或外部存储管理。
