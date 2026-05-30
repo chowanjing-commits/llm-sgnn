@@ -431,6 +431,14 @@ All commands used `conda run -n llm-sgnn`, `--model-type LLM_GNN_SAGE`,
 `--max-edges-per-recovered-node 5`, `--k-neighbors 5`, 3 seeds, and 100 epochs.
 Full arXiv used `--arxiv-subgraph-size 0`.
 
+The `No cold-start` control is still sparse. It uses the same corrupted graph as
+the cold-start methods after incident edges of hidden training candidates have
+been removed. With `--admission-ratio 0.0`, the pipeline admits no cold-start
+node, adds no semantic recovery edge, and keeps `train_mask` equal to the
+observed training mask. The script
+`scripts/utils/verify_no_cold_start_control.py` checks these invariants on a toy
+graph.
+
 Output files:
 
 - `logs/cold_start_formal_cora_sage_summary_20260530_142118.csv`
@@ -582,6 +590,7 @@ Protocol invariant check:
 
 ```powershell
 conda run -n llm-sgnn python scripts\utils\verify_cold_start_protocol.py
+conda run -n llm-sgnn python scripts\utils\verify_no_cold_start_control.py
 ```
 
 This synthetic check changes the hidden ground-truth labels of cold-start nodes
