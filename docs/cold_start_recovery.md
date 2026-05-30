@@ -755,6 +755,72 @@ full-arXiv/GraphSAGE, but it is not uniformly better than edge-only or
 no-cold-start across backbones. It should remain an opt-in reliability policy,
 not the default cold-start objective.
 
+### Reliability Threshold Screen
+
+We then screened stricter confidence and support thresholds for the
+high-reliability gate without training a GNN. The diagnostic script reuses the
+same admission, pseudo-label, and semantic edge-recovery pipeline, but only
+reports how many admitted nodes would enter `pseudo_train_mask` and their
+offline pseudo-label accuracy:
+
+```powershell
+conda run -n llm-sgnn python scripts\utils\screen_cold_start_reliability.py --datasets cora,pubmed,wikics,arxiv --arxiv-subgraph-size 0 --num-runs 3 --confidence-thresholds 0.0,0.6,0.65,0.7,0.75,0.8 --min-supports 0,2,5 --pseudo-label-agreements nearest_and_centroid --output-prefix cold_start_reliability_full_screen
+```
+
+Output files:
+
+- `logs/cold_start_reliability_full_screen_summary_20260530_192118.csv`
+- `logs/cold_start_reliability_full_screen_raw_20260530_192118.csv`
+
+Representative diagnostic rows with `min_pseudo_label_support=0`:
+
+| Dataset | Confidence | Pseudo-train | Pseudo-label acc. | Mean confidence |
+|---|---:|---:|---:|---:|
+| Cora | 0.00 | 10.7 | 0.8222 | 0.6213 |
+| Cora | 0.65 | 5.3 | 0.9107 | 0.8670 |
+| PubMed | 0.00 | 10.3 | 0.5333 | 0.5997 |
+| PubMed | 0.60 | 5.7 | 0.6151 | 0.6937 |
+| WikiCS | 0.00 | 88.0 | 0.8751 | 0.6712 |
+| WikiCS | 0.70 | 26.0 | 0.9921 | 0.8738 |
+| WikiCS | 0.80 | 23.0 | 1.0000 | 0.9531 |
+| arXiv-full | 0.00 | 13103.0 | 0.8038 | 0.6030 |
+| arXiv-full | 0.70 | 4969.3 | 0.9217 | 0.8492 |
+| arXiv-full | 0.80 | 2789.0 | 0.9499 | 0.9164 |
+
+The screen shows that confidence thresholds are effective reliability filters,
+but not all datasets have a useful high-confidence subset. PubMed remains weak:
+raising the threshold leaves very few labels and still keeps pseudo-label
+accuracy near 60%, so pseudo-supervision should be avoided there.
+
+We trained the most plausible GraphSAGE candidates from this screen:
+
+| Dataset | Confidence | Accuracy | Std | Pseudo-train | Pseudo-label acc. |
+|---|---:|---:|---:|---:|---:|
+| Cora | 0.60 | 0.7003 | 0.0188 | 6.7 | 0.8750 |
+| Cora | 0.65 | 0.7090 | 0.0142 | 5.3 | 0.9107 |
+| WikiCS | 0.70 | 0.7098 | 0.0051 | 26.0 | 0.9921 |
+| WikiCS | 0.80 | 0.7122 | 0.0068 | 23.0 | 1.0000 |
+| arXiv-full | 0.70 | 0.6077 | 0.0004 | 4969.3 | 0.9217 |
+| arXiv-full | 0.80 | 0.6083 | 0.0009 | 2789.0 | 0.9499 |
+
+Output files:
+
+- `logs/cold_start_reliable_c060_cora_sage_summary_20260530_192722.csv`
+- `logs/cold_start_reliable_c065_cora_sage_summary_20260530_192342.csv`
+- `logs/cold_start_reliable_c070_wikics_sage_summary_20260530_192742.csv`
+- `logs/cold_start_reliable_c080_wikics_sage_summary_20260530_192404.csv`
+- `logs/cold_start_reliable_c070_arxiv_full_sage_summary_20260530_193023.csv`
+- `logs/cold_start_reliable_c080_arxiv_full_sage_summary_20260530_192647.csv`
+
+The stricter thresholds improve pseudo-label accuracy but do not improve the
+main downstream conclusion. Cora gets worse than the unthresholded
+high-reliability run; WikiCS at confidence 0.80 is slightly better than the
+unthresholded high-reliability run but still below the no-cold-start control;
+full arXiv becomes worse than the unthresholded high-reliability run. The
+working interpretation is therefore: thresholding is a useful safety control
+when pseudo labels are enabled, but stronger pseudo-label reliability alone is
+not sufficient to make pseudo-supervised cold-start recovery the default method.
+
 ## Review Notes
 
 Protocol audit:
@@ -792,6 +858,9 @@ Protocol audit:
   filtering invariant directly: tightening the pseudo-label confidence threshold
   leaves admitted and recovered nodes in the graph, but withholds
   low-confidence nodes from `pseudo_train_mask`.
+- `scripts/utils/screen_cold_start_reliability.py` screens confidence/support
+  gates without GNN training, so candidate reliability policies can be evaluated
+  before running expensive downstream experiments.
 - With `--pseudo-label-loss-weight 0.0`, nodes in `pseudo_train_mask` are still
   tracked for diagnostics, but their pseudo labels have zero supervised-loss
   weight. They can still influence message passing through recovered edges.

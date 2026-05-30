@@ -18,6 +18,8 @@ extension and related paper updates.
 - Added cold-start pseudo-label reliability controls:
   `--min-pseudo-label-support`, `--pseudo-label-agreement`, and
   `--pseudo-label-loss-weight`.
+- Added `scripts/utils/screen_cold_start_reliability.py` to screen
+  confidence/support gates before launching downstream GNN training.
 - Integrated cold-start mode into the main single-dataset runner for Ours
   backbones.
 - Separated graph admission from pseudo-label supervision:
@@ -48,18 +50,24 @@ It can improve selected settings, especially full ogbn-arxiv with GraphSAGE, but
 it is not stable enough across datasets and backbones to promote cold-start to
 the main contribution.
 
+A stricter confidence-threshold screen improves pseudo-label diagnostic accuracy
+but does not improve the downstream conclusion: very high thresholds leave too
+few pseudo-supervised nodes on small datasets and reduce full-arXiv GraphSAGE
+accuracy below the unthresholded high-reliability setting.
+
 ## Verification Commands
 
 Use the project conda environment:
 
 ```powershell
-conda run -n llm-sgnn python -m py_compile src\cold_start.py scripts\utils\run_cold_start_recovery.py scripts\utils\run_single_dataset_pilot.py scripts\utils\verify_cold_start_protocol.py scripts\utils\verify_no_cold_start_control.py scripts\utils\verify_selective_pseudo_label_filter.py scripts\utils\verify_pseudo_label_loss_weight.py scripts\utils\verify_cold_start_paper_tables.py scripts\utils\verify_repository_hygiene.py
+conda run -n llm-sgnn python -m py_compile src\cold_start.py scripts\utils\run_cold_start_recovery.py scripts\utils\run_single_dataset_pilot.py scripts\utils\screen_cold_start_reliability.py scripts\utils\verify_cold_start_protocol.py scripts\utils\verify_no_cold_start_control.py scripts\utils\verify_selective_pseudo_label_filter.py scripts\utils\verify_pseudo_label_loss_weight.py scripts\utils\verify_cold_start_paper_tables.py scripts\utils\verify_repository_hygiene.py
 conda run -n llm-sgnn python scripts\utils\verify_cold_start_protocol.py
 conda run -n llm-sgnn python scripts\utils\verify_no_cold_start_control.py
 conda run -n llm-sgnn python scripts\utils\verify_selective_pseudo_label_filter.py
 conda run -n llm-sgnn python scripts\utils\verify_pseudo_label_loss_weight.py
 conda run -n llm-sgnn python scripts\utils\verify_cold_start_paper_tables.py
 conda run -n llm-sgnn python scripts\utils\verify_repository_hygiene.py
+conda run -n llm-sgnn python scripts\utils\screen_cold_start_reliability.py --datasets cora --num-runs 1 --confidence-thresholds 0.0,0.7 --min-supports 0,2 --output-prefix cold_start_reliability_smoke
 git diff --check
 ```
 
@@ -71,6 +79,7 @@ The verification scripts cover:
 - low-confidence admitted nodes can stay in the graph while being withheld from
   pseudo-supervised training;
 - zero-weight pseudo labels do not affect supervised loss;
+- the reliability screen can regenerate gate-level diagnostics without training;
 - paper Tables D1-D8 match curated CSV summaries;
 - tracked files exclude large local artifacts, unexpected logs, embeddings,
   checkpoints, models, and generated binary caches.
