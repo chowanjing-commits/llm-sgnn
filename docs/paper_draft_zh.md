@@ -646,7 +646,7 @@ b = \min(k,\ b_{max},\ \lceil d_{obs} \rceil).
 | ogbn-arxiv-full | GAT | 53.58 ± 0.51 | 34102.0 | 34102.0 | 71104.0 | 46.99 |
 | ogbn-arxiv-full | GraphSAGE | 55.01 ± 0.46 | 34102.0 | 34102.0 | 71104.0 | 46.99 |
 
-表注：实验使用节点缺失率 0.75、准入比例 0.50、每准入节点最多 5 条恢复边、三随机种子和 100 轮训练。准确率和伪标签准确率单位为百分比；伪标签准确率仅用于离线诊断，不参与训练。完整 ogbn-arxiv 覆盖 GCN、GAT 和 GraphSAGE 三种骨干。该表使用默认伪标签损失权重 1.0，因此它检验的是直接伪监督训练压力，而不是后续推荐的 edge-only 冷启动目标。
+表注：实验使用节点缺失率 0.75、准入比例 0.50、每准入节点最多 5 条恢复边、三随机种子和 100 轮训练。准确率和伪标签准确率单位为百分比；伪标签准确率指标仅用于离线诊断，不作为训练输入。完整 ogbn-arxiv 覆盖 GCN、GAT 和 GraphSAGE 三种骨干。该表使用默认伪标签损失权重 1.0，因此它检验的是直接伪监督训练压力，而不是后续推荐的 edge-only 冷启动目标。
 
 进一步地，本文用 GraphSAGE 骨干补充了四种冷启动控制条件：不加入 cold-start 节点、随机准入 0.50、聚类代表准入 0.50、以及全部加入。结果显示，聚类代表准入在四个数据集上均优于相同预算的随机准入，并通常优于全部加入；但在当前把伪标签直接作为监督标签的训练协议下，它仍低于“不加入 cold-start 节点”的控制组。该现象说明当前冷启动流程已经验证了代表性筛选和受控连边的必要性，但伪标签噪声仍会削弱监督训练信号。因此，本文暂不将冷启动提升为正文主贡献，而将其定位为附录扩展和后续工作方向；若要作为主贡献，需要引入更强的伪标签置信度控制或不把伪标签等同于真实标签的训练目标。
 
@@ -713,6 +713,19 @@ b = \min(k,\ b_{max},\ \lceil d_{obs} \rceil).
 
 表注：数值为测试准确率均值，单位为百分比；差值为 edge-only 减 no-cold-start。表 D6 说明，edge-only 冷启动消除了直接伪标签监督带来的明显伤害，但相对于不加入 cold-start 节点的保守控制组，当前收益仍主要是持平而不是稳定超过。因此，本文仍不将冷启动扩展提升为正文主贡献，而将其作为文本-only 新节点准入、结构恢复和伪标签诊断的附录能力。
 
+进一步地，本文测试更严格的“高可靠伪标签子集”策略：准入和连边仍面向全部被选中的文本-only 节点，但只有当聚类多数伪标签同时与近邻标签和类中心标签一致时，该节点才进入伪标签监督。该策略对应 `--pseudo-label-agreement nearest_and_centroid` 和伪标签损失权重 1.0；未通过一致性门槛的节点仍可通过恢复边参与消息传递，但不进入监督损失。
+
+**表 D7. 严格一致性下的高可靠伪标签子集诊断。**
+
+| 数据集 | 不加入 cold-start | Edge-only | 高可靠伪标签 | 伪标签训练节点 | 伪标签准确率 |
+|---|---:|---:|---:|---:|---:|
+| Cora | 72.50 ± 0.73 | 72.30 ± 0.85 | 71.90 ± 1.45 | 10.7 | 82.22 |
+| PubMed | 68.00 ± 4.63 | 68.17 ± 4.58 | 66.33 ± 4.53 | 10.3 | 53.33 |
+| WikiCS | 71.32 ± 0.70 | 71.14 ± 0.42 | 71.12 ± 0.39 | 88.0 | 87.51 |
+| ogbn-arxiv-full | 61.09 ± 0.35 | 60.89 ± 0.28 | 61.25 ± 0.42 | 13103.0 | 80.38 |
+
+表注：实验使用 GraphSAGE 骨干、准入比例 0.50、每准入节点最多 5 条恢复边、三随机种子和 100 轮训练。高可靠伪标签策略显著减少进入监督损失的伪标签节点，并在 Cora、WikiCS 和完整 ogbn-arxiv 上将伪标签准确率提高到 80% 以上。它在完整 ogbn-arxiv 上略高于 no-cold-start 和 edge-only，但在 Cora、PubMed 和 WikiCS 上仍未稳定超过更保守的设置。因而当前结论是：可以只给高可靠子集加入伪标签，但这应作为数据集依赖的可选扩展，而不是默认主方法。
+
 ## 附录 E. 复现材料与结果文件
 
 为便于阶段性复现，表 E1 汇总本文当前使用的轻量结果文件和说明。大规模原始数据、模型权重、缓存 embedding 和 checkpoint 不纳入正文附录表，也不建议纳入版本控制。
@@ -761,6 +774,10 @@ b = \min(k,\ b_{max},\ \lceil d_{obs} \rceil).
 | 冷启动主入口 no-cold-start | `logs/pubmed_single_pilot_drop0_node75_20260530_164245.csv` | 生成表 D6 的 PubMed 主入口 no-cold-start 对照 |
 | 冷启动主入口 no-cold-start | `logs/wikics_single_pilot_drop0_node75_20260530_164326.csv` | 生成表 D6 的 WikiCS 主入口 no-cold-start 对照 |
 | 冷启动主入口 no-cold-start | `logs/arxiv_single_pilot_drop0_node75_20260530_164516.csv` | 生成表 D6 的完整 ogbn-arxiv 主入口 no-cold-start 对照 |
+| 冷启动高可靠伪标签 | `logs/cold_start_agree_and_w1_cora_sage_summary_20260530_165913.csv` | 生成表 D7 的 Cora 严格一致性结果 |
+| 冷启动高可靠伪标签 | `logs/cold_start_agree_and_w1_pubmed_sage_summary_20260530_165954.csv` | 生成表 D7 的 PubMed 严格一致性结果 |
+| 冷启动高可靠伪标签 | `logs/cold_start_agree_and_w1_wikics_sage_summary_20260530_170023.csv` | 生成表 D7 的 WikiCS 严格一致性结果 |
+| 冷启动高可靠伪标签 | `logs/cold_start_agree_and_w1_arxiv_full_sage_summary_20260530_170256.csv` | 生成表 D7 的完整 ogbn-arxiv 严格一致性结果 |
 | 冷启动准入 | `src/cold_start.py` | 文本特征生成、冷启动配置、准入、伪标签、语义连边和训练掩码构造组件 |
 | 冷启动主入口 | `scripts/utils/run_single_dataset_pilot.py` | 支持 `--cold-start` 的主训练入口，用于从主方法路径调用冷启动流程 |
 | 冷启动准入 | `scripts/utils/summarize_cold_start_budget.py` | 从冷启动预算 CSV 生成表 D1-D2 的 Markdown |

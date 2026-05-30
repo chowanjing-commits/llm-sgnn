@@ -144,6 +144,11 @@ Other supported strategies:
 loss. Nodes below the threshold may still have recovery edges, but they are not
 used as labeled training examples.
 
+`--pseudo-label-agreement` and `--min-pseudo-label-support` provide stricter
+reliability gates. This lets the pipeline keep an admitted text-only node in the
+message-passing graph while withholding its pseudo label from supervision unless
+the pseudo label is sufficiently reliable.
+
 `--pseudo-label-loss-weight` controls the supervised-loss weight of
 pseudo-labeled cold-start nodes that pass the confidence/support/agreement
 filters. The default `1.0` preserves the original pseudo-supervised protocol.
@@ -673,6 +678,43 @@ recovery can safely add text-only nodes for message passing, but pseudo labels
 should remain diagnostic by default. Any supervised use of pseudo labels should
 be explicitly weighted and separately validated until a stronger reliability
 mechanism consistently beats the no-cold-start control.
+
+### High-Reliability Pseudo-Label Subset
+
+We next tested the user's proposed policy directly: keep admitted nodes and
+recovered edges, but add pseudo labels only for a stricter high-reliability
+subset. The stricter gate uses:
+
+```powershell
+--pseudo-label-agreement nearest_and_centroid --pseudo-label-loss-weight 1.0
+```
+
+This requires the primary `cluster_majority` pseudo label to agree with both
+`nearest_labeled` and `class_centroid`. Nodes that fail this gate remain
+connected if selected, but do not enter `pseudo_train_mask`.
+
+Output files:
+
+- `logs/cold_start_agree_and_w1_cora_sage_summary_20260530_165913.csv`
+- `logs/cold_start_agree_and_w1_pubmed_sage_summary_20260530_165954.csv`
+- `logs/cold_start_agree_and_w1_wikics_sage_summary_20260530_170023.csv`
+- `logs/cold_start_agree_and_w1_arxiv_full_sage_summary_20260530_170256.csv`
+
+| Dataset | No cold-start | Edge-only | High-reliability pseudo labels | Selected cold-start | Pseudo-train | Pseudo-label acc. |
+|---|---:|---:|---:|---:|---:|---:|
+| Cora | 0.7250 +/- 0.0073 | 0.7230 +/- 0.0085 | 0.7190 +/- 0.0145 | 50.0 | 10.7 | 0.8222 |
+| PubMed | 0.6800 +/- 0.0463 | 0.6817 +/- 0.0458 | 0.6633 +/- 0.0453 | 22.0 | 10.3 | 0.5333 |
+| WikiCS | 0.7132 +/- 0.0070 | 0.7114 +/- 0.0042 | 0.7112 +/- 0.0039 | 217.0 | 88.0 | 0.8751 |
+| arXiv-full | 0.6109 +/- 0.0035 | 0.6089 +/- 0.0028 | 0.6125 +/- 0.0042 | 34102.0 | 13103.0 | 0.8038 |
+
+The stricter gate behaves as intended: it reduces pseudo-supervised nodes and
+raises pseudo-label accuracy, reaching 82.2% on Cora, 87.5% on WikiCS, and 80.4%
+on full arXiv. The downstream effect is dataset-dependent. It slightly improves
+full arXiv over both no-cold-start and edge-only, but it still underperforms or
+matches the safer controls on Cora, PubMed, and WikiCS. The current default
+recommendation is therefore: use edge-only as the safest cold-start setting, and
+treat high-reliability pseudo supervision as an optional dataset-dependent
+extension that needs its own validation.
 
 ## Review Notes
 
