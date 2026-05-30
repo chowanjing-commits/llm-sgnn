@@ -611,6 +611,23 @@ def build_cold_start_training_state_from_config(
     )
 
 
+def weighted_supervised_loss(
+    out,
+    train_y,
+    train_mask,
+    pseudo_train_mask=None,
+    pseudo_label_loss_weight=1.0,
+):
+    loss_values = F.cross_entropy(out[train_mask], train_y[train_mask], reduction="none")
+    weights = torch.ones_like(loss_values)
+    if pseudo_train_mask is not None and pseudo_label_loss_weight != 1.0:
+        pseudo_train_mask = pseudo_train_mask.to(device=train_mask.device)
+        weights[pseudo_train_mask[train_mask]] = max(0.0, float(pseudo_label_loss_weight))
+    if weights.sum().item() <= 0:
+        raise RuntimeError("No positive-weight training nodes remain after pseudo-label loss weighting.")
+    return (loss_values * weights).sum() / weights.sum()
+
+
 def safe_nanmean(values):
     arr = np.asarray(values, dtype=float)
     if arr.size == 0 or np.isnan(arr).all():

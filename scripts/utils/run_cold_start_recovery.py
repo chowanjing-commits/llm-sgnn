@@ -18,7 +18,6 @@ sys.path.insert(0, str(PROJECT_ROOT))
 import numpy as np
 import pandas as pd
 import torch
-import torch.nn.functional as F
 import torch.serialization
 from torch_geometric.data import Data
 from torch_geometric.data.data import DataEdgeAttr, DataTensorAttr
@@ -38,6 +37,7 @@ from src.cold_start import (
     ColdStartPipelineConfig,
     build_cold_start_training_state_from_config,
     safe_nanmean,
+    weighted_supervised_loss,
 )
 
 torch.serialization.add_safe_globals(
@@ -70,16 +70,6 @@ def parse_csv_ints(value):
 
 def parse_csv_floats(value):
     return [float(item) for item in value.split(",") if item.strip()]
-
-
-def weighted_supervised_loss(out, train_y, train_mask, pseudo_train_mask, pseudo_label_loss_weight):
-    loss_values = F.cross_entropy(out[train_mask], train_y[train_mask], reduction="none")
-    weights = torch.ones_like(loss_values)
-    if pseudo_train_mask is not None and pseudo_label_loss_weight != 1.0:
-        weights[pseudo_train_mask[train_mask]] = max(0.0, float(pseudo_label_loss_weight))
-    if weights.sum().item() <= 0:
-        raise RuntimeError("No positive-weight training nodes remain after pseudo-label loss weighting.")
-    return (loss_values * weights).sum() / weights.sum()
 
 
 def train_gnn(

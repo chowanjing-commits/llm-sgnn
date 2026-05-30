@@ -775,6 +775,10 @@ Protocol audit:
 - With `--pseudo-label-loss-weight 0.0`, nodes in `pseudo_train_mask` are still
   tracked for diagnostics, but their pseudo labels have zero supervised-loss
   weight. They can still influence message passing through recovered edges.
+- `scripts/utils/verify_pseudo_label_loss_weight.py` checks the edge-only loss
+  invariant directly: changing pseudo labels does not change the supervised loss
+  when `--pseudo-label-loss-weight 0.0`, while positive-weight pseudo labels do
+  affect the loss.
 - `cluster_representative` and `random` share the same `admission_ratio` budget.
 - Full arXiv runs use `--arxiv-subgraph-size 0`.
 
@@ -799,8 +803,11 @@ Protocol invariant check:
 ```powershell
 conda run -n llm-sgnn python scripts\utils\verify_cold_start_protocol.py
 conda run -n llm-sgnn python scripts\utils\verify_no_cold_start_control.py
+conda run -n llm-sgnn python scripts\utils\verify_pseudo_label_loss_weight.py
 ```
 
 This synthetic check changes the hidden ground-truth labels of cold-start nodes
 and asserts that admission, recovered edges, pseudo-train membership, and the
-pseudo labels used by the supervised loss do not change.
+pseudo labels used by the supervised loss do not change. The loss-weight check
+separately verifies that edge-only runs do not consume pseudo labels through the
+supervised loss.

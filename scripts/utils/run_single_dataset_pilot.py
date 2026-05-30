@@ -26,7 +26,12 @@ from src.models import GAT, GCN, GraphSAGE, LLM_GNN, MLP
 from scripts.preprocess.preprocess_arxiv import preprocess_arxiv, sample_arxiv_subgraph
 from scripts.preprocess.preprocess_citation import preprocess_citation
 from scripts.preprocess.preprocess_wikics import get_wikics_split, preprocess_wikics
-from src.cold_start import ColdStartPipelineConfig, build_cold_start_training_state_from_config, safe_nanmean
+from src.cold_start import (
+    ColdStartPipelineConfig,
+    build_cold_start_training_state_from_config,
+    safe_nanmean,
+    weighted_supervised_loss,
+)
 
 torch.serialization.add_safe_globals(
     [DataEdgeAttr, DataTensorAttr, Data, GlobalStorage, NodeStorage, EdgeStorage]
@@ -380,20 +385,13 @@ def train_and_eval(
         else:
             out = model(x, exp_data.edge_index)
             effective_train_mask = train_mask
-        loss_values = F.cross_entropy(
-            out[effective_train_mask],
-            exp_data.train_y[effective_train_mask],
-            reduction="none",
+        loss = weighted_supervised_loss(
+            out=out,
+            train_y=exp_data.train_y,
+            train_mask=effective_train_mask,
+            pseudo_train_mask=exp_data.pseudo_train_mask,
+            pseudo_label_loss_weight=pseudo_label_loss_weight,
         )
-        loss_weights = torch.ones_like(loss_values)
-        if pseudo_label_loss_weight != 1.0:
-            loss_weights[exp_data.pseudo_train_mask[effective_train_mask]] = max(
-                0.0,
-                float(pseudo_label_loss_weight),
-            )
-        if loss_weights.sum().item() <= 0:
-            raise RuntimeError("No positive-weight training nodes remain after pseudo-label loss weighting.")
-        loss = (loss_values * loss_weights).sum() / loss_weights.sum()
         loss.backward()
         optimizer.step()
 
