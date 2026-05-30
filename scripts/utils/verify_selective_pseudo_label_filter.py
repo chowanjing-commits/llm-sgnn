@@ -106,6 +106,8 @@ def main():
         raise AssertionError("withheld nodes should fail the pseudo-label confidence threshold")
     if not torch.equal(strict["train_mask"], observed_train_mask | strict["pseudo_train_mask"]):
         raise AssertionError("train_mask must be observed_train_mask union pseudo_train_mask")
+    if strict["pseudo_y"][withheld_mask].any():
+        raise AssertionError("withheld cold-start labels must be scrubbed from pseudo_y")
 
     changed_hidden_y = y.clone()
     changed_hidden_y[cold_start_mask] = torch.tensor([2, 0, 2], dtype=torch.long)
@@ -115,6 +117,7 @@ def main():
     assert_tensor_equal("successful_recovered_mask", strict["successful_recovered_mask"], changed["successful_recovered_mask"])
     assert_tensor_equal("pseudo_train_mask", strict["pseudo_train_mask"], changed["pseudo_train_mask"])
     assert_tensor_equal("train_mask", strict["train_mask"], changed["train_mask"])
+    assert_tensor_equal("full_pseudo_y", strict["pseudo_y"], changed["pseudo_y"])
 
     pseudo_nodes = strict["pseudo_train_mask"]
     assert pseudo_nodes.any(), "strict threshold should keep a high-confidence pseudo-labeled subset"

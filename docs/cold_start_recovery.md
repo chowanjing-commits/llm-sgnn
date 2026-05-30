@@ -781,6 +781,10 @@ Protocol audit:
   `cluster_majority`, `nearest_labeled`, or `class_centroid`.
 - Ground-truth labels of cold-start nodes are used only to compute
   `pseudo_label_accuracy_mean`.
+- The returned `pseudo_y` training-label vector is scrubbed outside the actual
+  training mask: it keeps observed training labels and reliable pseudo labels,
+  but cold-start nodes that do not enter `pseudo_train_mask` are filled with a
+  neutral class id rather than their hidden ground-truth labels.
 - If no finite pseudo-label confidence is produced for an admitted node, that
   node is excluded from `pseudo_train_mask` even when the confidence threshold is
   `0.0`; this prevents default labels from leaking into the supervised loss.

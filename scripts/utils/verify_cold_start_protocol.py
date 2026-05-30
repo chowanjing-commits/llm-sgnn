@@ -102,6 +102,7 @@ def main():
     assert_equal("edge_index", baseline["edge_index"], changed["edge_index"])
     assert_equal("pseudo_train_mask", baseline["pseudo_train_mask"], changed["pseudo_train_mask"])
     assert_equal("added_recovery_edges", baseline["added_recovery_edges"], changed["added_recovery_edges"])
+    assert_equal("full_pseudo_y", baseline["pseudo_y"], changed["pseudo_y"])
 
     pseudo_nodes = baseline["pseudo_train_mask"]
     assert pseudo_nodes.any(), "toy protocol should admit pseudo-training nodes"
@@ -118,6 +119,8 @@ def main():
         raise AssertionError("cold-start nodes without inferred pseudo labels must not enter training")
     if no_observed["train_mask"].any():
         raise AssertionError("train_mask must stay empty when no observed or pseudo-labeled nodes exist")
+    if no_observed["pseudo_y"][cold_start_mask].any():
+        raise AssertionError("hidden cold-start labels must be scrubbed from pseudo_y when not pseudo-labeled")
 
     print("Cold-start protocol verification passed.")
 

@@ -557,9 +557,12 @@ def build_cold_start_training_state(
     )
     pseudo_train_mask = label_ready_mask & successful_recovered_mask
     train_mask = observed_train_mask | pseudo_train_mask
+    train_y = torch.zeros_like(y)
+    train_y[observed_train_mask] = y[observed_train_mask]
+    train_y[pseudo_train_mask] = pseudo_y[pseudo_train_mask]
     return {
         "edge_index": repaired_edge_index,
-        "pseudo_y": pseudo_y,
+        "pseudo_y": train_y,
         "train_mask": train_mask,
         "selected_mask": selected_mask,
         "cluster_labels": cluster_labels,
