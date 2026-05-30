@@ -364,14 +364,14 @@ def train_and_eval(
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config.LEARNING_RATE, weight_decay=config.WEIGHT_DECAY)
     x = exp_data.x_llm if use_llm else exp_data.x
-    if not train_mask.any():
+    if not exp_data.train_mask.any():
         raise RuntimeError(
             "No training nodes remain after graph corruption. "
             "Lower --node-drop-rate, raise --admission-ratio, or lower --pseudo-label-confidence."
         )
     best_val = 0.0
     best_test = 0.0
-    effective_train_mask = train_mask.clone()
+    effective_train_mask = exp_data.train_mask
     gcn_edge_index = exp_data.edge_index
     if is_repair_model(model_type):
         gcn_edge_index, _ = add_self_loops(gcn_edge_index, num_nodes=exp_data.num_nodes)
@@ -381,10 +381,8 @@ def train_and_eval(
         optimizer.zero_grad()
         if is_repair_model(model_type):
             out = model.gnn(x, gcn_edge_index)
-            effective_train_mask = train_mask
         else:
             out = model(x, exp_data.edge_index)
-            effective_train_mask = train_mask
         loss = weighted_supervised_loss(
             out=out,
             train_y=exp_data.train_y,
@@ -419,7 +417,7 @@ def train_and_eval(
     torch.cuda.empty_cache()
     gc.collect()
     observed_train_count = int(observed_train_mask.sum().item())
-    effective_train_count = int(effective_train_mask.sum().item())
+    effective_train_count = int(train_mask.sum().item())
     return {
         "accuracy": best_test,
         "sparse_edges": sparse_edge.size(1),
@@ -609,6 +607,7 @@ def main():
     rows = []
     for model_name, model_type, use_llm in models:
         print(f"\n{model_name}")
+        model_uses_cold_start = bool(args.cold_start and is_repair_model(model_type))
         accs = []
         kept_edges = []
         dropped_nodes = []
@@ -645,7 +644,7 @@ def main():
                     max_edges_per_recovered_node=args.max_edges_per_recovered_node,
                     repair_policy=args.repair_policy,
                     adaptive_threshold_alpha=args.adaptive_threshold_alpha,
-                    cold_start_config=cold_start_config if is_repair_model(model_type) else None,
+                    cold_start_config=cold_start_config if model_uses_cold_start else None,
                     pseudo_label_loss_weight=args.pseudo_label_loss_weight,
                     seed=seed + split_idx * 100,
                 )
@@ -670,7 +669,7 @@ def main():
                 selected_center_distances.append(result["selected_center_distance_mean"])
                 selected_metric = (
                     f"selected_cold_start={result['selected_cold_start_nodes']} "
-                    if args.cold_start and is_repair_model(model_type)
+                    if model_uses_cold_start
                     else f"sampled_recovered={result['sampled_recovered_nodes']} "
                 )
                 print(
@@ -703,10 +702,10 @@ def main():
                 "observed_train_nodes_mean": float(np.mean(observed_train_nodes)),
                 "cold_start_train_nodes_mean": float(np.mean(cold_start_train_nodes)),
                 "selected_cold_start_nodes_mean": (
-                    float(np.mean(selected_cold_start_nodes)) if args.cold_start else np.nan
+                    float(np.mean(selected_cold_start_nodes)) if model_uses_cold_start else np.nan
                 ),
                 "pseudo_label_agreement_nodes_mean": (
-                    float(np.mean(pseudo_label_agreement_nodes)) if args.cold_start else np.nan
+                    float(np.mean(pseudo_label_agreement_nodes)) if model_uses_cold_start else np.nan
                 ),
                 "sampled_recovered_nodes_mean": float(np.mean(sampled_recovered_nodes)),
                 "label_ready_nodes_mean": float(np.mean(label_ready_nodes)),
@@ -721,16 +720,16 @@ def main():
                 "num_runs": args.num_runs,
                 "k_neighbors": args.k_neighbors,
                 "beta": args.beta,
-                "recovery_ratio": np.nan if args.cold_start else args.recovery_ratio,
-                "cold_start": bool(args.cold_start),
-                "admission_ratio": args.admission_ratio if args.cold_start else np.nan,
-                "admission_strategy": args.admission_strategy if args.cold_start else "",
-                "pseudo_label_strategy": args.pseudo_label_strategy if args.cold_start else "",
-                "pseudo_label_k": args.pseudo_label_k if args.cold_start else np.nan,
-                "pseudo_label_confidence": args.pseudo_label_confidence if args.cold_start else np.nan,
-                "pseudo_label_loss_weight": args.pseudo_label_loss_weight if args.cold_start else np.nan,
-                "min_pseudo_label_support": args.min_pseudo_label_support if args.cold_start else np.nan,
-                "pseudo_label_agreement": args.pseudo_label_agreement if args.cold_start else "",
+                "recovery_ratio": np.nan if model_uses_cold_start else args.recovery_ratio,
+                "cold_start": model_uses_cold_start,
+                "admission_ratio": args.admission_ratio if model_uses_cold_start else np.nan,
+                "admission_strategy": args.admission_strategy if model_uses_cold_start else "",
+                "pseudo_label_strategy": args.pseudo_label_strategy if model_uses_cold_start else "",
+                "pseudo_label_k": args.pseudo_label_k if model_uses_cold_start else np.nan,
+                "pseudo_label_confidence": args.pseudo_label_confidence if model_uses_cold_start else np.nan,
+                "pseudo_label_loss_weight": args.pseudo_label_loss_weight if model_uses_cold_start else np.nan,
+                "min_pseudo_label_support": args.min_pseudo_label_support if model_uses_cold_start else np.nan,
+                "pseudo_label_agreement": args.pseudo_label_agreement if model_uses_cold_start else "",
                 "repair_policy": args.repair_policy,
                 "similarity_threshold": args.similarity_threshold,
                 "adaptive_threshold_alpha": args.adaptive_threshold_alpha,

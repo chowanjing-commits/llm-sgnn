@@ -768,6 +768,10 @@ Protocol audit:
   models through the cold-start pipeline and uses `pseudo_y` rather than the
   hidden labels of dropped cold-start nodes. The contribution of pseudo-labeled
   nodes is controlled by `--pseudo-label-loss-weight`.
+- In mixed `run_single_dataset_pilot.py --cold-start` runs, row-level CSV
+  metadata sets `cold_start=True` only for Ours/`LLM_GNN_*` repair models that
+  actually call the cold-start pipeline. Non-repair baselines keep sparse-graph
+  behavior and are logged with empty cold-start hyperparameter fields.
 - Cold-start admission uses only `x_llm` and the cold-start candidate mask.
 - `x_llm` can be loaded from cache or regenerated from raw text with
   `--force-regenerate-embeddings`.
