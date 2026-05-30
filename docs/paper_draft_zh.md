@@ -648,6 +648,8 @@ b = \min(k,\ b_{max},\ \lceil d_{obs} \rceil).
 
 表注：实验使用节点缺失率 0.75、准入比例 0.50、每准入节点最多 5 条恢复边、三随机种子和 100 轮训练。准确率和伪标签准确率单位为百分比；伪标签准确率仅用于离线诊断，不参与训练。完整 ogbn-arxiv 覆盖 GCN、GAT 和 GraphSAGE 三种骨干。
 
+进一步地，本文用 GraphSAGE 骨干补充了四种冷启动控制条件：不加入 cold-start 节点、随机准入 0.50、聚类代表准入 0.50、以及全部加入。结果显示，聚类代表准入在四个数据集上均优于相同预算的随机准入，并通常优于全部加入；但在当前把伪标签直接作为监督标签的训练协议下，它仍低于“不加入 cold-start 节点”的控制组。该现象说明当前冷启动流程已经验证了代表性筛选和受控连边的必要性，但伪标签噪声仍会削弱监督训练信号。因此，本文暂不将冷启动提升为正文主贡献，而将其定位为附录扩展和后续工作方向；若要作为主贡献，需要引入更强的伪标签置信度控制或不把伪标签等同于真实标签的训练目标。
+
 ## 附录 E. 复现材料与结果文件
 
 为便于阶段性复现，表 E1 汇总本文当前使用的轻量结果文件和说明。大规模原始数据、模型权重、缓存 embedding 和 checkpoint 不纳入正文附录表，也不建议纳入版本控制。
@@ -678,6 +680,10 @@ b = \min(k,\ b_{max},\ \lceil d_{obs} \rceil).
 | 冷启动主入口 | `logs/pubmed_single_pilot_coldstart_drop0_node75_20260529_212946.csv` | 生成表 D3 的 PubMed 主入口集成结果 |
 | 冷启动主入口 | `logs/wikics_single_pilot_coldstart_drop0_node75_20260529_213036.csv` | 生成表 D3 的 WikiCS 主入口集成结果 |
 | 冷启动主入口 | `logs/arxiv_single_pilot_coldstart_drop0_node75_20260529_213555.csv` | 生成表 D3 的完整 ogbn-arxiv 主入口集成结果 |
+| 冷启动控制 | `logs/cold_start_formal_cora_sage_summary_20260530_142118.csv` | 冷启动四条件控制的 Cora GraphSAGE 结果 |
+| 冷启动控制 | `logs/cold_start_formal_pubmed_sage_summary_20260530_142216.csv` | 冷启动四条件控制的 PubMed GraphSAGE 结果 |
+| 冷启动控制 | `logs/cold_start_formal_wikics_sage_summary_20260530_142300.csv` | 冷启动四条件控制的 WikiCS GraphSAGE 结果 |
+| 冷启动控制 | `logs/cold_start_formal_arxiv_full_sage_summary_20260530_143237.csv` | 冷启动四条件控制的完整 ogbn-arxiv GraphSAGE 结果 |
 | 冷启动准入 | `src/cold_start.py` | 文本特征生成、冷启动配置、准入、伪标签、语义连边和训练掩码构造组件 |
 | 冷启动主入口 | `scripts/utils/run_single_dataset_pilot.py` | 支持 `--cold-start` 的主训练入口，用于从主方法路径调用冷启动流程 |
 | 冷启动准入 | `scripts/utils/summarize_cold_start_budget.py` | 从冷启动预算 CSV 生成表 D1-D2 的 Markdown |

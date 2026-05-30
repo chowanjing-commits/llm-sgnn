@@ -414,6 +414,63 @@ training with pseudo labels. The full arXiv GraphSAGE run matches the standalone
 full-graph budget scale at ratio `0.50`, which supports using the integrated
 runner for later main-method experiments.
 
+## Formal Cold-Start Controls
+
+To decide whether cold-start should be promoted from an appendix extension to a
+main contribution, we ran a stricter four-way control using the standalone
+GraphSAGE path:
+
+- `No cold-start`: `--admission-ratio 0.0`; train only on observed nodes.
+- `Random admission`: `--admission-ratio 0.5 --admission-strategies random`.
+- `Cluster representative`: `--admission-ratio 0.5 --admission-strategies cluster_representative`.
+- `Admit all`: `--admission-ratio 1.0`; both admission strategies select the
+  same candidate set, so the representative mechanism disappears.
+
+All commands used `conda run -n llm-sgnn`, `--model-type LLM_GNN_SAGE`,
+`--node-drop-rate 0.75`, `--drop-rate 0.0`, `--repair-policy adaptive`,
+`--max-edges-per-recovered-node 5`, `--k-neighbors 5`, 3 seeds, and 100 epochs.
+Full arXiv used `--arxiv-subgraph-size 0`.
+
+Output files:
+
+- `logs/cold_start_formal_cora_sage_summary_20260530_142118.csv`
+- `logs/cold_start_formal_pubmed_sage_summary_20260530_142216.csv`
+- `logs/cold_start_formal_wikics_sage_summary_20260530_142300.csv`
+- `logs/cold_start_formal_arxiv_full_sage_summary_20260530_143237.csv`
+
+| Dataset | Control | Accuracy | Std | Selected cold-start | Pseudo-train | Recovery edges | Pseudo-label acc. |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Cora | No cold-start | 0.7250 | 0.0073 | 0.0 | 0.0 | 0.0 | nan |
+| Cora | Random admission | 0.4147 | 0.0782 | 50.0 | 50.0 | 102.0 | 0.2267 |
+| Cora | Cluster representative | 0.5023 | 0.0921 | 50.0 | 50.0 | 99.7 | 0.3800 |
+| Cora | Admit all | 0.3563 | 0.0647 | 100.0 | 100.0 | 198.3 | 0.2667 |
+| PubMed | No cold-start | 0.6800 | 0.0463 | 0.0 | 0.0 | 0.0 | nan |
+| PubMed | Random admission | 0.4737 | 0.0651 | 22.0 | 22.0 | 43.7 | 0.3636 |
+| PubMed | Cluster representative | 0.5310 | 0.1501 | 22.0 | 22.0 | 45.7 | 0.4091 |
+| PubMed | Admit all | 0.5563 | 0.0608 | 45.0 | 45.0 | 91.3 | 0.5481 |
+| WikiCS | No cold-start | 0.7132 | 0.0070 | 0.0 | 0.0 | 0.0 | nan |
+| WikiCS | Random admission | 0.5432 | 0.0312 | 217.0 | 217.0 | 449.3 | 0.3932 |
+| WikiCS | Cluster representative | 0.5779 | 0.0247 | 217.0 | 217.0 | 461.3 | 0.5069 |
+| WikiCS | Admit all | 0.5190 | 0.0376 | 435.0 | 435.0 | 898.3 | 0.4406 |
+| arXiv-full | No cold-start | 0.6109 | 0.0035 | 0.0 | 0.0 | 0.0 | nan |
+| arXiv-full | Random admission | 0.5081 | 0.0162 | 34102.0 | 34102.0 | 71009.7 | 0.4380 |
+| arXiv-full | Cluster representative | 0.5489 | 0.0047 | 34102.0 | 34102.0 | 71104.0 | 0.4699 |
+| arXiv-full | Admit all | 0.4989 | 0.0362 | 68205.0 | 68205.0 | 142105.0 | 0.4315 |
+
+Conclusion:
+
+- `Cluster representative` consistently improves over `Random admission` at the
+  same budget, and usually improves over `Admit all`.
+- It does not outperform `No cold-start` under this supervised-loss protocol.
+  The likely reason is pseudo-label noise: the admitted nodes enter the
+  supervised loss, but pseudo-label accuracy is only 38.0% on Cora, 40.9% on
+  PubMed, 50.7% on WikiCS, and 47.0% on full arXiv.
+- Therefore, the current evidence supports cold-start as a controlled appendix
+  extension and implementation capability, not yet as a stronger main
+  contribution. Promoting it would require a better pseudo-label reliability
+  mechanism or a training objective that does not treat noisy pseudo labels as
+  ordinary ground-truth supervision.
+
 ## Review Notes
 
 Protocol audit:
