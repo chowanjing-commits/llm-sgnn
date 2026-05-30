@@ -726,6 +726,27 @@ b = \min(k,\ b_{max},\ \lceil d_{obs} \rceil).
 
 表注：实验使用 GraphSAGE 骨干、准入比例 0.50、每准入节点最多 5 条恢复边、三随机种子和 100 轮训练。高可靠伪标签策略显著减少进入监督损失的伪标签节点，并在 Cora、WikiCS 和完整 ogbn-arxiv 上将伪标签准确率提高到 80% 以上。它在完整 ogbn-arxiv 上略高于 no-cold-start 和 edge-only，但在 Cora、PubMed 和 WikiCS 上仍未稳定超过更保守的设置。因而当前结论是：可以只给高可靠子集加入伪标签，但这应作为数据集依赖的可选扩展，而不是默认主方法。
 
+为确认这一现象不是 standalone GraphSAGE 脚本特有，本文进一步在主训练入口中对 GCN、GAT 和 GraphSAGE 三种 Ours 骨干重复高可靠伪标签策略。
+
+**表 D8. 主训练入口下的高可靠伪标签子集验证。**
+
+| 数据集 | 骨干 | 准确率 | 伪标签训练节点 | 伪标签准确率 |
+|---|---|---:|---:|---:|
+| Cora | GCN | 72.33 ± 2.46 | 10.7 | 82.22 |
+| Cora | GAT | 72.60 ± 2.95 | 10.7 | 82.22 |
+| Cora | GraphSAGE | 71.90 ± 1.45 | 10.7 | 82.22 |
+| PubMed | GCN | 68.17 ± 4.42 | 10.3 | 53.33 |
+| PubMed | GAT | 65.03 ± 6.24 | 10.3 | 53.33 |
+| PubMed | GraphSAGE | 66.33 ± 4.53 | 10.3 | 53.33 |
+| WikiCS | GCN | 70.77 ± 1.22 | 88.0 | 87.51 |
+| WikiCS | GAT | 70.23 ± 0.42 | 88.0 | 87.51 |
+| WikiCS | GraphSAGE | 71.12 ± 0.39 | 88.0 | 87.51 |
+| ogbn-arxiv-full | GCN | 58.12 ± 0.30 | 13103.0 | 80.38 |
+| ogbn-arxiv-full | GAT | 59.56 ± 0.37 | 13103.0 | 80.38 |
+| ogbn-arxiv-full | GraphSAGE | 61.25 ± 0.59 | 13103.0 | 80.38 |
+
+表注：设置与表 D7 相同，但通过主训练入口运行三种 Ours 骨干。表 D8 表明，高可靠伪标签监督在 Cora/GAT 和完整 ogbn-arxiv/GraphSAGE 上有正面信号，但并未在所有骨干和数据集上稳定优于 edge-only 或 no-cold-start。因此，本文将它作为可选可靠性策略，而不是冷启动扩展的默认目标。
+
 ## 附录 E. 复现材料与结果文件
 
 为便于阶段性复现，表 E1 汇总本文当前使用的轻量结果文件和说明。大规模原始数据、模型权重、缓存 embedding 和 checkpoint 不纳入正文附录表，也不建议纳入版本控制。
@@ -778,6 +799,10 @@ b = \min(k,\ b_{max},\ \lceil d_{obs} \rceil).
 | 冷启动高可靠伪标签 | `logs/cold_start_agree_and_w1_pubmed_sage_summary_20260530_165954.csv` | 生成表 D7 的 PubMed 严格一致性结果 |
 | 冷启动高可靠伪标签 | `logs/cold_start_agree_and_w1_wikics_sage_summary_20260530_170023.csv` | 生成表 D7 的 WikiCS 严格一致性结果 |
 | 冷启动高可靠伪标签 | `logs/cold_start_agree_and_w1_arxiv_full_sage_summary_20260530_170256.csv` | 生成表 D7 的完整 ogbn-arxiv 严格一致性结果 |
+| 冷启动高可靠主入口 | `logs/cora_single_pilot_coldstart_drop0_node75_20260530_171132.csv` | 生成表 D8 的 Cora 主入口高可靠伪标签结果 |
+| 冷启动高可靠主入口 | `logs/pubmed_single_pilot_coldstart_drop0_node75_20260530_171213.csv` | 生成表 D8 的 PubMed 主入口高可靠伪标签结果 |
+| 冷启动高可靠主入口 | `logs/wikics_single_pilot_coldstart_drop0_node75_20260530_171309.csv` | 生成表 D8 的 WikiCS 主入口高可靠伪标签结果 |
+| 冷启动高可靠主入口 | `logs/arxiv_single_pilot_coldstart_drop0_node75_20260530_172042.csv` | 生成表 D8 的完整 ogbn-arxiv 主入口高可靠伪标签结果 |
 | 冷启动准入 | `src/cold_start.py` | 文本特征生成、冷启动配置、准入、伪标签、语义连边和训练掩码构造组件 |
 | 冷启动主入口 | `scripts/utils/run_single_dataset_pilot.py` | 支持 `--cold-start` 的主训练入口，用于从主方法路径调用冷启动流程 |
 | 冷启动准入 | `scripts/utils/summarize_cold_start_budget.py` | 从冷启动预算 CSV 生成表 D1-D2 的 Markdown |

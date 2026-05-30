@@ -716,6 +716,37 @@ recommendation is therefore: use edge-only as the safest cold-start setting, and
 treat high-reliability pseudo supervision as an optional dataset-dependent
 extension that needs its own validation.
 
+We also ran the same high-reliability policy through the main entry for all Ours
+backbones.
+
+Output files:
+
+- `logs/cora_single_pilot_coldstart_drop0_node75_20260530_171132.csv`
+- `logs/pubmed_single_pilot_coldstart_drop0_node75_20260530_171213.csv`
+- `logs/wikics_single_pilot_coldstart_drop0_node75_20260530_171309.csv`
+- `logs/arxiv_single_pilot_coldstart_drop0_node75_20260530_172042.csv`
+
+| Dataset | Backbone | Accuracy | Std | Pseudo-train | Pseudo-label acc. |
+|---|---|---:|---:|---:|---:|
+| Cora | GCN | 0.7233 | 0.0246 | 10.7 | 0.8222 |
+| Cora | GAT | 0.7260 | 0.0295 | 10.7 | 0.8222 |
+| Cora | GraphSAGE | 0.7190 | 0.0145 | 10.7 | 0.8222 |
+| PubMed | GCN | 0.6817 | 0.0442 | 10.3 | 0.5333 |
+| PubMed | GAT | 0.6503 | 0.0624 | 10.3 | 0.5333 |
+| PubMed | GraphSAGE | 0.6633 | 0.0453 | 10.3 | 0.5333 |
+| WikiCS | GCN | 0.7077 | 0.0122 | 88.0 | 0.8751 |
+| WikiCS | GAT | 0.7023 | 0.0042 | 88.0 | 0.8751 |
+| WikiCS | GraphSAGE | 0.7112 | 0.0039 | 88.0 | 0.8751 |
+| arXiv-full | GCN | 0.5812 | 0.0030 | 13103.0 | 0.8038 |
+| arXiv-full | GAT | 0.5956 | 0.0037 | 13103.0 | 0.8038 |
+| arXiv-full | GraphSAGE | 0.6125 | 0.0059 | 13103.0 | 0.8038 |
+
+The main-entry matrix confirms the narrower interpretation. High-reliability
+pseudo supervision can help selected settings, notably Cora/GAT and
+full-arXiv/GraphSAGE, but it is not uniformly better than edge-only or
+no-cold-start across backbones. It should remain an opt-in reliability policy,
+not the default cold-start objective.
+
 ## Review Notes
 
 Protocol audit:
